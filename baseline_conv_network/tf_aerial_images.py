@@ -20,7 +20,9 @@ import code
 import tensorflow.python.platform
 
 import numpy
-import tensorflow as tf
+#import tensorflow as tf        # switch to older version of tensorflow
+import tensorflow.compat.v1 as tf
+tf.disable_eager_execution()
 
 NUM_CHANNELS = 3  # RGB images
 PIXEL_DEPTH = 255

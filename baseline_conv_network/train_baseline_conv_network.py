@@ -14,6 +14,7 @@ import sys
 import urllib
 import matplotlib.image as mpimg
 from PIL import Image
+import submission_helpers
 
 import code
 
@@ -31,7 +32,7 @@ TRAINING_SIZE = 20
 VALIDATION_SIZE = 5  # Size of the validation set.
 SEED = 66478  # Set to None for random seed.
 BATCH_SIZE = 16  # 64
-NUM_EPOCHS = 1
+NUM_EPOCHS = 100
 #RESTORE_MODEL = False  # If True, restore existing model instead of training a new one
 RECORDING_STEP = 0
 
@@ -179,6 +180,21 @@ def label_to_img(imgwidth, imgheight, w, h, labels):
             array_labels[j : j + w, i : i + h] = l
             idx = idx + 1
     return array_labels
+
+
+# convert probabilities of patches into 1d list of patch labels
+def probabilities_to_1d_label_list(imgwidth, imgheight, w, h, labels):
+    label_list = []
+    idx = 0
+    for i in range(0, imgheight, h):
+        for j in range(0, imgwidth, w):
+            if labels[idx][0] > 0.5:  # bgrd
+                l = 0
+            else:
+                l = 1
+            label_list.append(l)
+            idx = idx + 1
+    return label_list
 
 
 def img_float_to_uint8(img):
@@ -603,13 +619,22 @@ def main(restore_model=False):  # pylint: disable=unused-argument
             prediction_testing_dir = "predictions_testing/"
             if not os.path.isdir(prediction_testing_dir):
                 os.mkdir(prediction_testing_dir)
-            for i in range(1, 50 + 1):
+            for i in range(1, 5 + 1):
+                # Save combination
                 pimg = get_prediction_with_groundtruth("test_set_images/test_" + str(i) + "/test_" + str(i) + ".png", -1)
-                Image.fromarray(pimg).save(
-                    prediction_testing_dir + "prediction_" + str(i) + ".png"
-                )
+                Image.fromarray(pimg).save(prediction_testing_dir + "prediction_" + str(i) + ".png")
+                # Save overlay
                 oimg = get_prediction_with_overlay("test_set_images/test_" + str(i) + "/test_" + str(i) + ".png", -1)
                 oimg.save(prediction_testing_dir + "overlay_" + str(i) + ".png")
+            # List to make submission with
+            all_labels = []
+            for i in range(1, 50 + 1):
+                image_name = "test_set_images/test_" + str(i) + "/test_" + str(i) + ".png"
+                one_dimensional_label_list = get_prediction(mpimg.imread(image_name)).ravel()
+                all_labels.append(one_dimensional_label_list)
+            # Now make final csv submission file
+            submission_helpers.labels_to_submission("baseline_submission.csv", all_labels)
+
 
 def run_train_baseline_conv_network():
     main()

@@ -314,6 +314,10 @@ def main(argv=None):  # pylint: disable=unused-argument
     train_labels_node = tf.placeholder(tf.float32, shape=(BATCH_SIZE, NUM_LABELS))
     train_all_data_node = tf.constant(train_data)
 
+    # Input variables for the average mean and variances of the convolutions for use during inference
+    conv1_mean = tf.placeholder(tf.float32, shape=(1, 32, 1, 1))
+    conv1_variance = tf.placeholder(tf.float32, shape=(1, 32, 1, 1))
+
     # The variables below hold all the trainable weights. They are passed an
     # initial value which will be assigned when when we call:
     # {tf.initialize_all_variables().run()}
@@ -322,7 +326,7 @@ def main(argv=None):  # pylint: disable=unused-argument
             [5, 5, NUM_CHANNELS, 32], stddev=0.1, seed=SEED  # 5x5 filter, depth 32.
         )
     )
-    conv1_biases = tf.Variable(tf.zeros([32]))
+    #conv1_biases = tf.Variable(tf.zeros([32]))
     conv2_weights = tf.Variable(
         tf.truncated_normal([5, 5, 32, 64], stddev=0.1, seed=SEED)
     )
@@ -412,8 +416,12 @@ def main(argv=None):  # pylint: disable=unused-argument
         # the same size as the input). Note that {strides} is a 4D array whose
         # shape matches the data layout: [image index, y, x, depth].
         conv = tf.nn.conv2d(data, conv1_weights, strides=[1, 1, 1, 1], padding="SAME")
-        # Bias and rectified linear non-linearity.
-        relu = tf.nn.relu(tf.nn.bias_add(conv, conv1_biases))
+        # Batch normalisation
+        batch1_mean = tf.reduce_mean(conv, [0, 1, 2])
+        batch1_mean, batch1_variance = tf.nn.moments(conv, [0, 1, 2], shift=None, keepdims=False, name=None)
+        bn = tf.nn.batch_normalization(conv, batch1_mean, batch1_variance, None, None, 1e-10)
+        # Rectified linear non-linearity.
+        relu = tf.nn.relu(bn)
         # Max pooling. The kernel size spec {ksize} also follows the layout of
         # the data. Here we have a pooling window of 2, and a stride of 2.
         pool = tf.nn.max_pool(
@@ -476,7 +484,7 @@ def main(argv=None):  # pylint: disable=unused-argument
 
     all_params_node = [
         conv1_weights,
-        conv1_biases,
+        #conv1_biases,
         conv2_weights,
         conv2_biases,
         fc1_weights,

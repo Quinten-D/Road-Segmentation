@@ -8,3 +8,5 @@
 /baseline_conv_network/test_set_images.zip
 /baseline_conv_network/baseline_submission.csv
 /conv_1/training/images/
+/conv_1/training/
+/conv_1/test_set_images/

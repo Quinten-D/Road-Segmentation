@@ -263,6 +263,12 @@ def make_img_overlay(img, predicted_img):
     return new_img
 
 
+# Own function to calculate the ema of mean and variance of batch
+def exponential_moving_average(new_value, old_ema, ema_steps):
+    smoothing = 2
+    return (new_value * (smoothing/(1+ema_steps))) + old_ema * (1-(smoothing/(1+ema_steps)))
+
+
 def main(argv=None):  # pylint: disable=unused-argument
 
     data_dir = "training/"
@@ -314,9 +320,12 @@ def main(argv=None):  # pylint: disable=unused-argument
     train_labels_node = tf.placeholder(tf.float32, shape=(BATCH_SIZE, NUM_LABELS))
     train_all_data_node = tf.constant(train_data)
 
-    # Input variables for the average mean and variances of the convolutions for use during inference
-    conv1_mean = tf.placeholder(tf.float32, shape=(1, 32, 1, 1))
-    conv1_variance = tf.placeholder(tf.float32, shape=(1, 32, 1, 1))
+    # Variables to hold expected means and variances for use during inference
+    conv1_expected_mean = tf.Variable(tf.zeros([32]))
+    conv1_expected_variance = tf.Variable(tf.zeros([32]))
+
+    # True when inference is needed (important for batch normalization)
+    inference_mode = tf.Variable(False)
 
     # The variables below hold all the trainable weights. They are passed an
     # initial value which will be assigned when when we call:
@@ -326,7 +335,7 @@ def main(argv=None):  # pylint: disable=unused-argument
             [5, 5, NUM_CHANNELS, 32], stddev=0.1, seed=SEED  # 5x5 filter, depth 32.
         )
     )
-    #conv1_biases = tf.Variable(tf.zeros([32]))
+    conv1_biases = tf.Variable(tf.zeros([32]))
     conv2_weights = tf.Variable(
         tf.truncated_normal([5, 5, 32, 64], stddev=0.1, seed=SEED)
     )
@@ -410,16 +419,16 @@ def main(argv=None):  # pylint: disable=unused-argument
 
     # We will replicate the model structure for the training subgraph, as well
     # as the evaluation subgraphs, while sharing the trainable parameters.
-    def model(data, train=False):
+    def model(data, train=False, return_means_and_variances=False):
         """The Model definition."""
         # 2D convolution, with 'SAME' padding (i.e. the output feature map has
         # the same size as the input). Note that {strides} is a 4D array whose
         # shape matches the data layout: [image index, y, x, depth].
         conv = tf.nn.conv2d(data, conv1_weights, strides=[1, 1, 1, 1], padding="SAME")
         # Batch normalisation
-        batch1_mean = tf.reduce_mean(conv, [0, 1, 2])
         batch1_mean, batch1_variance = tf.nn.moments(conv, [0, 1, 2], shift=None, keepdims=False, name=None)
-        bn = tf.nn.batch_normalization(conv, batch1_mean, batch1_variance, None, None, 1e-10)
+        bn = tf.cond(inference_mode, lambda: tf.nn.batch_normalization(conv, conv1_expected_mean, conv1_expected_variance, None, None, 1e-10),
+                                    lambda: tf.nn.batch_normalization(conv, batch1_mean, batch1_variance, None, None, 1e-10))
         # Rectified linear non-linearity.
         relu = tf.nn.relu(bn)
         # Max pooling. The kernel size spec {ksize} also follows the layout of
@@ -468,8 +477,13 @@ def main(argv=None):  # pylint: disable=unused-argument
             tf.summary.image("summary_conv2" + summary_id, s_conv2, max_outputs=3)
             s_pool2 = get_image_summary(pool2)
             tf.summary.image("summary_pool2" + summary_id, s_pool2, max_outputs=3)
-        return out
+        if not return_means_and_variances:
+            return out
+        else:
+            return batch1_mean, batch1_variance
 
+    # Get means and variances
+    conv1_batch_mean, conv1_batch_variance = model(train_data_node, True, True)
     # Training computation: logits + cross-entropy loss.
     logits = model(train_data_node, True)  # BATCH_SIZE*NUM_LABELS
     # print 'logits = ' + str(logits.get_shape()) + ' train_labels_node = ' + str(train_labels_node.get_shape())
@@ -484,7 +498,7 @@ def main(argv=None):  # pylint: disable=unused-argument
 
     all_params_node = [
         conv1_weights,
-        #conv1_biases,
+        conv1_biases,
         conv2_weights,
         conv2_biases,
         fc1_weights,
@@ -554,6 +568,8 @@ def main(argv=None):  # pylint: disable=unused-argument
             #saver.restore(s, FLAGS.train_dir + "/model.ckpt")
             saver.restore(s, "stored_weights/model.ckpt")
             print("Model restored.")
+            print("value of inference mode:")
+            print(inference_mode.eval())
 
         else:
             # Run all the initializers to prepare the trainable parameters.
@@ -571,6 +587,11 @@ def main(argv=None):  # pylint: disable=unused-argument
             )
 
             training_indices = range(train_size)
+
+            # For average batch means and variances
+            conv1_mean_ema = 0
+            conv1_variance_ema = 0
+            ema_steps = 0
 
             for iepoch in range(num_epochs):
 
@@ -596,6 +617,11 @@ def main(argv=None):  # pylint: disable=unused-argument
                     }
 
                     if step == 0:
+                        c1_batch_mean, c1_batch_variance = s.run([conv1_batch_mean, conv1_batch_variance], feed_dict=feed_dict)
+                        conv1_mean_ema = exponential_moving_average(c1_batch_mean, conv1_mean_ema, ema_steps)
+                        conv1_variance_ema = exponential_moving_average(c1_batch_variance, conv1_variance_ema, ema_steps)
+                        ema_steps += 1
+
                         summary_str, _, l, lr, predictions = s.run(
                             [
                                 summary_op,
@@ -617,10 +643,15 @@ def main(argv=None):  # pylint: disable=unused-argument
                             "Minibatch error: %.1f%%"
                             % error_rate(predictions, batch_labels)
                         )
-
                         sys.stdout.flush()
                     else:
                         # Run the graph and fetch some of the nodes.
+                        #c1_batch_mean, c1_batch_variance = s.run([conv1_batch_mean, conv1_batch_variance],feed_dict=feed_dict)
+                        #conv1_mean_ema = c1_batch_mean
+                        #conv1_variance_ema = c1_batch_variance
+                        #s.run(conv1_expected_mean.assign(conv1_mean_ema))
+                        #s.run(conv1_expected_variance.assign(conv1_variance_ema))
+
                         _, l, lr, predictions = s.run(
                             [optimizer, loss, learning_rate, train_prediction],
                             feed_dict=feed_dict,
@@ -628,8 +659,19 @@ def main(argv=None):  # pylint: disable=unused-argument
 
                 # Save the variables to disk.
                 #save_path = saver.save(s, FLAGS.train_dir + "/model.ckpt")
+                s.run(conv1_expected_mean.assign(conv1_mean_ema))
+                s.run(conv1_expected_variance.assign(conv1_variance_ema))
                 save_path = saver.save(s, "stored_weights/model.ckpt")
                 print("Model saved in file: %s" % save_path)
+
+            # Set the variable inference_mode to True and save all variables one last time to disk
+            s.run(conv1_expected_mean.assign(conv1_mean_ema))
+            s.run(conv1_expected_variance.assign(conv1_variance_ema))
+            s.run(inference_mode.assign(True))
+            print("value of inference mode:")
+            print(inference_mode.eval())
+            save_path = saver.save(s, "stored_weights/model.ckpt")
+            print("End of training, model saved in file: %s" % save_path)
 
         print("Running prediction on training set")
         prediction_training_dir = "predictions_training/"
@@ -644,7 +686,7 @@ def main(argv=None):  # pylint: disable=unused-argument
             oimg.save(prediction_training_dir + "overlay_" + str(i) + ".png")
 
 
-def run_train_baseline_conv_network():
+def run_train_conv_network_1():
     tf.app.run()
 
 

@@ -324,6 +324,10 @@ def main(argv=None):  # pylint: disable=unused-argument
     conv1_expected_mean = tf.Variable(tf.zeros([32]))
     conv1_expected_variance = tf.Variable(tf.zeros([32]))
 
+    # Variables to hold parameters for the batch normalization layers
+    bn_scale_1 = tf.Variable(1.0)
+    bn_offset_1 = tf.Variable(0.0)
+
     # True when inference is needed (important for batch normalization)
     inference_mode = tf.Variable(False)
 
@@ -417,6 +421,43 @@ def main(argv=None):  # pylint: disable=unused-argument
 
         return oimg
 
+    # Own function to measure f1 score on validation set
+    def validate():
+        s.run(inference_mode.assign(True))
+        print("Running prediction on validation set")
+        # List of all filenames of the unseen training data (=validation data):
+        unseen_train_data_filenames = []
+        for i in range(81, 100):
+            filename = "training/images/satImage_%.3d" % i
+            filename = filename + ".png"
+            unseen_train_data_filenames.append(filename)
+            unseen_train_labels_filenames = []
+        for i in range(81, 100):
+            filename = "training/groundtruth/satImage_%.3d" % i
+            filename = filename + ".png"
+            unseen_train_labels_filenames.append(filename)
+        # now calculate F1 score and accuracy on unseen training data
+        accuracys = []
+        true_pos = 0
+        false_pos = 0
+        false_neg = 0
+        for i, unseen_file in enumerate(unseen_train_data_filenames):
+            image_prediction = get_prediction(mpimg.imread(unseen_file))
+            ground_truth = mpimg.imread(unseen_train_labels_filenames[i])
+            accuracys.append(validation_accuracy(image_prediction, ground_truth))
+            true_p, false_p, false_n = validation_true_pos_false_pos_true_neg(image_prediction, ground_truth)
+            true_pos += true_p
+            false_pos += false_p
+            false_neg += false_n
+        accuracy_on_unseen_data = numpy.mean(numpy.array(accuracys))
+        print("Accuracy on validation data: " + str(accuracy_on_unseen_data))
+        # Compute f1
+        precision = true_pos / (true_pos + false_pos)
+        recall = true_pos / (true_pos + false_neg)
+        f1 = 2 * precision * recall / (precision + recall)
+        print("F1 score of validation data: " + str(f1))
+        s.run(inference_mode.assign(False))
+
     # We will replicate the model structure for the training subgraph, as well
     # as the evaluation subgraphs, while sharing the trainable parameters.
     def model(data, train=False, return_means_and_variances=False):
@@ -427,8 +468,8 @@ def main(argv=None):  # pylint: disable=unused-argument
         conv = tf.nn.conv2d(data, conv1_weights, strides=[1, 1, 1, 1], padding="SAME")
         # Batch normalisation
         batch1_mean, batch1_variance = tf.nn.moments(conv, [0, 1, 2], shift=None, keepdims=False, name=None)
-        bn = tf.cond(inference_mode, lambda: tf.nn.batch_normalization(conv, conv1_expected_mean, conv1_expected_variance, None, None, 1e-10),
-                                    lambda: tf.nn.batch_normalization(conv, batch1_mean, batch1_variance, None, None, 1e-10))
+        bn = tf.cond(inference_mode, lambda: tf.nn.batch_normalization(conv, conv1_expected_mean, conv1_expected_variance, bn_scale_1, bn_offset_1, 1e-5),
+                                    lambda: tf.nn.batch_normalization(conv, batch1_mean, batch1_variance, bn_scale_1, bn_offset_1, 1e-5))
         # Rectified linear non-linearity.
         relu = tf.nn.relu(bn)
         # Max pooling. The kernel size spec {ksize} also follows the layout of
@@ -571,6 +612,9 @@ def main(argv=None):  # pylint: disable=unused-argument
             print("value of inference mode:")
             print(inference_mode.eval())
 
+            # Print the F1 score
+            validate()
+
         else:
             # Run all the initializers to prepare the trainable parameters.
             tf.global_variables_initializer().run()
@@ -664,6 +708,9 @@ def main(argv=None):  # pylint: disable=unused-argument
                 save_path = saver.save(s, "stored_weights/model.ckpt")
                 print("Model saved in file: %s" % save_path)
 
+                if iepoch%10==0:
+                    validate()
+
             # Set the variable inference_mode to True and save all variables one last time to disk
             s.run(conv1_expected_mean.assign(conv1_mean_ema))
             s.run(conv1_expected_variance.assign(conv1_variance_ema))
@@ -673,17 +720,18 @@ def main(argv=None):  # pylint: disable=unused-argument
             save_path = saver.save(s, "stored_weights/model.ckpt")
             print("End of training, model saved in file: %s" % save_path)
 
-        print("Running prediction on training set")
-        prediction_training_dir = "predictions_training/"
-        if not os.path.isdir(prediction_training_dir):
-            os.mkdir(prediction_training_dir)
-        for i in range(1, TRAINING_SIZE + 1):
-            pimg = get_prediction_with_groundtruth(train_data_filename, i)
-            Image.fromarray(pimg).save(
-                prediction_training_dir + "prediction_" + str(i) + ".png"
-            )
-            oimg = get_prediction_with_overlay(train_data_filename, i)
-            oimg.save(prediction_training_dir + "overlay_" + str(i) + ".png")
+        if not RESTORE_MODEL:
+            print("Running prediction on training set")
+            prediction_training_dir = "predictions_training/"
+            if not os.path.isdir(prediction_training_dir):
+                os.mkdir(prediction_training_dir)
+            for i in range(1, TRAINING_SIZE + 1):
+                pimg = get_prediction_with_groundtruth(train_data_filename, i)
+                Image.fromarray(pimg).save(
+                    prediction_training_dir + "prediction_" + str(i) + ".png"
+                )
+                oimg = get_prediction_with_overlay(train_data_filename, i)
+                oimg.save(prediction_training_dir + "overlay_" + str(i) + ".png")
 
 
 def run_train_conv_network_1():

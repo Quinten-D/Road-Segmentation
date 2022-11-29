@@ -11,3 +11,4 @@
 /conv_1/training/
 /conv_1/test_set_images/
 /conv_1/predictions_training/
+/conv_1/stored_weights/

@@ -269,6 +269,15 @@ def exponential_moving_average(new_value, old_ema, ema_steps):
     return (new_value * (smoothing/(1+ema_steps))) + old_ema * (1-(smoothing/(1+ema_steps)))
 
 
+# Own function, from 2d list to 1D patch label list
+def to_1d_patch_labels(pred):
+    labels = []
+    for i in range(0, len(pred), 16):
+        for j in range(0, len(pred[0]), 16):
+            labels.append(pred[i][j])
+    return labels
+
+
 def main(argv=None):  # pylint: disable=unused-argument
 
     data_dir = "training/"
@@ -330,7 +339,7 @@ def main(argv=None):  # pylint: disable=unused-argument
     bn_scale_1 = tf.Variable(1.0)
     bn_offset_1 = tf.Variable(0.0)
     bn_scale_2 = tf.Variable(1.0)
-    bn_offset_2 = tf.Variable(0.0)
+    bn_offset_2 = tf.Variable(0.1)
 
     # True when inference is needed (important for batch normalization)
     inference_mode = tf.Variable(False)
@@ -429,6 +438,7 @@ def main(argv=None):  # pylint: disable=unused-argument
     def validate():
         s.run(inference_mode.assign(True))
         print("Running prediction on validation set")
+        #print(conv2_expected_mean.eval())
         # List of all filenames of the unseen training data (=validation data):
         unseen_train_data_filenames = []
         for i in range(81, 100):
@@ -445,6 +455,12 @@ def main(argv=None):  # pylint: disable=unused-argument
         true_pos = 0
         false_pos = 0
         false_neg = 0
+        print("image pred")
+        print(to_1d_patch_labels(get_prediction(mpimg.imread(unseen_train_data_filenames[0]))))
+        print("scalar 1")
+        print(bn_scale_1.eval())
+        print("scale 2")
+        print(bn_scale_2.eval())
         for i, unseen_file in enumerate(unseen_train_data_filenames):
             image_prediction = get_prediction(mpimg.imread(unseen_file))
             ground_truth = mpimg.imread(unseen_train_labels_filenames[i])
@@ -453,12 +469,16 @@ def main(argv=None):  # pylint: disable=unused-argument
             true_pos += true_p
             false_pos += false_p
             false_neg += false_n
+            print(true_pos, false_pos)
         accuracy_on_unseen_data = numpy.mean(numpy.array(accuracys))
         print("Accuracy on validation data: " + str(accuracy_on_unseen_data))
         # Compute f1
-        precision = true_pos / (true_pos + false_pos)
-        recall = true_pos / (true_pos + false_neg)
-        f1 = 2 * precision * recall / (precision + recall)
+        #print("true pos and flase pos")
+        #print(true_pos)
+        #print(false_pos)
+        precision = true_pos / (true_pos + false_pos + 1.)   # +1 to avoid divide by zero
+        recall = true_pos / (true_pos + false_neg + 1.)      # +1 to avoid divide by zero
+        f1 = 2 * precision * recall / (precision + recall + 1.) # +1 to avoid divide by zero
         print("F1 score of validation data: " + str(f1))
         s.run(inference_mode.assign(False))
 
@@ -488,6 +508,7 @@ def main(argv=None):  # pylint: disable=unused-argument
                      lambda: tf.nn.batch_normalization(conv2, conv2_expected_mean, conv2_expected_variance, bn_scale_2, bn_offset_2, 1e-5),
                      lambda: tf.nn.batch_normalization(conv2, batch2_mean, batch2_variance, bn_scale_2, bn_offset_2, 1e-5))
         relu2 = tf.nn.relu(bn2)
+        #relu2 = tf.nn.relu(tf.nn.bias_add(conv2, conv2_biases))
         pool2 = tf.nn.max_pool(
             relu2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME"
         )
@@ -675,8 +696,12 @@ def main(argv=None):  # pylint: disable=unused-argument
                         conv1_mean_ema = exponential_moving_average(c1_batch_mean, conv1_mean_ema, ema_steps)
                         conv1_variance_ema = exponential_moving_average(c1_batch_variance, conv1_variance_ema, ema_steps)
                         conv2_mean_ema = exponential_moving_average(c2_batch_mean, conv2_mean_ema, ema_steps)
-                        conv2_variance_ema = exponential_moving_average(c2_batch_variance, conv2_variance_ema,ema_steps)
+                        conv2_variance_ema = exponential_moving_average(c2_batch_variance, conv2_variance_ema, ema_steps)
                         ema_steps += 1
+                        s.run(conv1_expected_mean.assign(conv1_mean_ema))
+                        s.run(conv1_expected_variance.assign(conv1_variance_ema))
+                        s.run(conv2_expected_mean.assign(conv2_mean_ema))
+                        s.run(conv2_expected_variance.assign(conv2_variance_ema))
 
                         summary_str, _, l, lr, predictions = s.run(
                             [
@@ -715,14 +740,16 @@ def main(argv=None):  # pylint: disable=unused-argument
 
                 # Save the variables to disk.
                 #save_path = saver.save(s, FLAGS.train_dir + "/model.ckpt")
-                s.run(conv1_expected_mean.assign(conv1_mean_ema))
-                s.run(conv1_expected_variance.assign(conv1_variance_ema))
-                s.run(conv2_expected_mean.assign(conv2_mean_ema))
-                s.run(conv2_expected_variance.assign(conv2_variance_ema))
+                #s.run(conv1_expected_mean.assign(conv1_mean_ema))
+                #s.run(conv1_expected_variance.assign(conv1_variance_ema))
+                #s.run(conv2_expected_mean.assign(conv2_mean_ema))
+                #s.run(conv2_expected_variance.assign(conv2_variance_ema))
                 save_path = saver.save(s, "stored_weights/model.ckpt")
                 print("Model saved in file: %s" % save_path)
 
-                if iepoch%10==0:
+                if iepoch%5==1:
+                    #print("jjkj")
+                    #print(conv2_expected_mean.eval())
                     validate()
 
             # Set the variable inference_mode to True and save all variables one last time to disk

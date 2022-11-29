@@ -717,6 +717,8 @@ def main(argv=None):  # pylint: disable=unused-argument
                 #save_path = saver.save(s, FLAGS.train_dir + "/model.ckpt")
                 s.run(conv1_expected_mean.assign(conv1_mean_ema))
                 s.run(conv1_expected_variance.assign(conv1_variance_ema))
+                s.run(conv2_expected_mean.assign(conv2_mean_ema))
+                s.run(conv2_expected_variance.assign(conv2_variance_ema))
                 save_path = saver.save(s, "stored_weights/model.ckpt")
                 print("Model saved in file: %s" % save_path)
 
@@ -724,8 +726,6 @@ def main(argv=None):  # pylint: disable=unused-argument
                     validate()
 
             # Set the variable inference_mode to True and save all variables one last time to disk
-            s.run(conv1_expected_mean.assign(conv1_mean_ema))
-            s.run(conv1_expected_variance.assign(conv1_variance_ema))
             s.run(inference_mode.assign(True))
             print("value of inference mode:")
             print(inference_mode.eval())

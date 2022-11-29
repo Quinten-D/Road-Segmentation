@@ -323,10 +323,14 @@ def main(argv=None):  # pylint: disable=unused-argument
     # Variables to hold expected means and variances for use during inference
     conv1_expected_mean = tf.Variable(tf.zeros([32]))
     conv1_expected_variance = tf.Variable(tf.zeros([32]))
+    conv2_expected_mean = tf.Variable(tf.zeros([64]))
+    conv2_expected_variance = tf.Variable(tf.zeros([64]))
 
     # Variables to hold parameters for the batch normalization layers
     bn_scale_1 = tf.Variable(1.0)
     bn_offset_1 = tf.Variable(0.0)
+    bn_scale_2 = tf.Variable(1.0)
+    bn_offset_2 = tf.Variable(0.0)
 
     # True when inference is needed (important for batch normalization)
     inference_mode = tf.Variable(False)
@@ -479,7 +483,11 @@ def main(argv=None):  # pylint: disable=unused-argument
         )
 
         conv2 = tf.nn.conv2d(pool, conv2_weights, strides=[1, 1, 1, 1], padding="SAME")
-        relu2 = tf.nn.relu(tf.nn.bias_add(conv2, conv2_biases))
+        batch2_mean, batch2_variance = tf.nn.moments(conv2, [0, 1, 2], shift=None, keepdims=False, name=None)
+        bn2 = tf.cond(inference_mode,
+                     lambda: tf.nn.batch_normalization(conv2, conv2_expected_mean, conv2_expected_variance, bn_scale_2, bn_offset_2, 1e-5),
+                     lambda: tf.nn.batch_normalization(conv2, batch2_mean, batch2_variance, bn_scale_2, bn_offset_2, 1e-5))
+        relu2 = tf.nn.relu(bn2)
         pool2 = tf.nn.max_pool(
             relu2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME"
         )
@@ -521,10 +529,10 @@ def main(argv=None):  # pylint: disable=unused-argument
         if not return_means_and_variances:
             return out
         else:
-            return batch1_mean, batch1_variance
+            return batch1_mean, batch1_variance, batch2_mean, batch2_variance
 
     # Get means and variances
-    conv1_batch_mean, conv1_batch_variance = model(train_data_node, True, True)
+    conv1_batch_mean, conv1_batch_variance, conv2_batch_mean, conv2_batch_variance = model(train_data_node, True, True)
     # Training computation: logits + cross-entropy loss.
     logits = model(train_data_node, True)  # BATCH_SIZE*NUM_LABELS
     # print 'logits = ' + str(logits.get_shape()) + ' train_labels_node = ' + str(train_labels_node.get_shape())
@@ -635,6 +643,8 @@ def main(argv=None):  # pylint: disable=unused-argument
             # For average batch means and variances
             conv1_mean_ema = 0
             conv1_variance_ema = 0
+            conv2_mean_ema = 0
+            conv2_variance_ema = 0
             ema_steps = 0
 
             for iepoch in range(num_epochs):
@@ -661,9 +671,11 @@ def main(argv=None):  # pylint: disable=unused-argument
                     }
 
                     if step == 0:
-                        c1_batch_mean, c1_batch_variance = s.run([conv1_batch_mean, conv1_batch_variance], feed_dict=feed_dict)
+                        c1_batch_mean, c1_batch_variance, c2_batch_mean, c2_batch_variance = s.run([conv1_batch_mean, conv1_batch_variance, conv2_batch_mean, conv2_batch_variance], feed_dict=feed_dict)
                         conv1_mean_ema = exponential_moving_average(c1_batch_mean, conv1_mean_ema, ema_steps)
                         conv1_variance_ema = exponential_moving_average(c1_batch_variance, conv1_variance_ema, ema_steps)
+                        conv2_mean_ema = exponential_moving_average(c2_batch_mean, conv2_mean_ema, ema_steps)
+                        conv2_variance_ema = exponential_moving_average(c2_batch_variance, conv2_variance_ema,ema_steps)
                         ema_steps += 1
 
                         summary_str, _, l, lr, predictions = s.run(

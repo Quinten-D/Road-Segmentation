@@ -487,10 +487,11 @@ def main(argv=None):  # pylint: disable=unused-argument
         # the same size as the input). Note that {strides} is a 4D array whose
         # shape matches the data layout: [image index, y, x, depth].
         conv = tf.nn.conv2d(data, conv1_weights, strides=[1, 1, 1, 1], padding="SAME")
-        # Batch normalisation
-        #batch1_mean, batch1_variance = tf.nn.moments(conv, [0, 1, 2], shift=None, keepdims=False, name=None)
-        #bn = tf.cond(inference_mode, lambda: tf.nn.batch_normalization(conv, conv1_expected_mean, conv1_expected_variance, bn_scale_1, bn_offset_1, 1e-5),
-        #                            lambda: tf.nn.batch_normalization(conv, batch1_mean, batch1_variance, bn_scale_1, bn_offset_1, 1e-5))
+        """ Batch normalisation
+        batch1_mean, batch1_variance = tf.nn.moments(conv, [0, 1, 2], shift=None, keepdims=False, name=None)
+        bn = tf.cond(inference_mode, lambda: tf.nn.batch_normalization(conv, conv1_expected_mean, conv1_expected_variance, bn_scale_1, bn_offset_1, 1e-5),
+                                    lambda: tf.nn.batch_normalization(conv, batch1_mean, batch1_variance, bn_scale_1, bn_offset_1, 1e-5))
+        """
         # Rectified linear non-linearity.
         #relu = tf.nn.relu(bn)
         relu = tf.nn.relu(tf.nn.bias_add(conv, conv1_biases))
@@ -501,13 +502,15 @@ def main(argv=None):  # pylint: disable=unused-argument
         )
 
         conv2 = tf.nn.conv2d(pool, conv2_weights, strides=[1, 1, 1, 1], padding="SAME")
-        #batch2_mean, batch2_variance = tf.nn.moments(conv2, [0, 1, 2], shift=None, keepdims=False, name=None)
-        #bn2 = tf.cond(inference_mode,
-        #             lambda: tf.nn.batch_normalization(conv2, conv2_expected_mean, conv2_expected_variance, bn_scale_2, bn_offset_2, 1e-5),
-        #             lambda: tf.nn.batch_normalization(conv2, batch2_mean, batch2_variance, bn_scale_2, bn_offset_2, 1e-5))
+        """ Batch normalisation
+        batch2_mean, batch2_variance = tf.nn.moments(conv2, [0, 1, 2], shift=None, keepdims=False, name=None)
+        bn2 = tf.cond(inference_mode,
+                     lambda: tf.nn.batch_normalization(conv2, conv2_expected_mean, conv2_expected_variance, bn_scale_2, bn_offset_2, 1e-5),
+                     lambda: tf.nn.batch_normalization(conv2, batch2_mean, batch2_variance, bn_scale_2, bn_offset_2, 1e-5))
+        """
         #relu2 = tf.nn.relu(bn2)
-        relu2 = tf.nn.relu(tf.nn.bias_add(conv2, conv2_biases))
         #relu2 = tf.nn.relu(tf.nn.bias_add(conv2, conv2_biases))
+        relu2 = tf.nn.relu(tf.nn.bias_add(conv2, conv2_biases))
         pool2 = tf.nn.max_pool(
             relu2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME"
         )

@@ -165,7 +165,7 @@ def validation_accuracy(prediction_image, groundtruth_image):
 
 
 # Own function to help measure F1 on the validation set
-def validation_true_pos_false_pos_true_neg(prediction_image, groundtruth_image):
+def validation_true_pos_false_pos_false_neg(prediction_image, groundtruth_image):
     prediction_image_patches = img_crop(prediction_image, IMG_PATCH_SIZE, IMG_PATCH_SIZE)
     groundtruth_image_patches = img_crop(groundtruth_image, IMG_PATCH_SIZE, IMG_PATCH_SIZE)
     foreground_threshold = 0.25  # percentage of pixels > 1 required to assign a foreground label to a patch
@@ -414,6 +414,45 @@ def main(argv=None):  # pylint: disable=unused-argument
 
         return oimg
 
+    # Own function to measure f1 score on validation set
+    def validate():
+        print("Running prediction on validation set")
+        # print(conv2_expected_mean.eval())
+        # List of all filenames of the unseen training data (=validation data):
+        unseen_train_data_filenames = []
+        for i in range(81, 100):
+            filename = "training/images/satImage_%.3d" % i
+            filename = filename + ".png"
+            unseen_train_data_filenames.append(filename)
+        unseen_train_labels_filenames = []
+        for i in range(81, 100):
+            filename = "training/groundtruth/satImage_%.3d" % i
+            filename = filename + ".png"
+            unseen_train_labels_filenames.append(filename)
+        # now calculate F1 score and accuracy on unseen training data
+        accuracys = []
+        true_pos = 0
+        false_pos = 0
+        false_neg = 0
+        # print("image pred")
+        # print(to_1d_patch_labels(get_prediction(mpimg.imread(unseen_train_data_filenames[0]))))
+        for i, unseen_file in enumerate(unseen_train_data_filenames):
+            image_prediction = get_prediction(mpimg.imread(unseen_file))
+            ground_truth = mpimg.imread(unseen_train_labels_filenames[i])
+            accuracys.append(validation_accuracy(image_prediction, ground_truth))
+            true_p, false_p, false_n = validation_true_pos_false_pos_false_neg(image_prediction, ground_truth)
+            true_pos += true_p
+            false_pos += false_p
+            false_neg += false_n
+        # print(true_pos, false_pos)
+        accuracy_on_unseen_data = numpy.mean(numpy.array(accuracys))
+        print("Accuracy on validation data: " + str(accuracy_on_unseen_data))
+        # Compute f1
+        precision = true_pos / (true_pos + false_pos + 1.)  # +1 to avoid divide by zero
+        recall = true_pos / (true_pos + false_neg + 1.)  # +1 to avoid divide by zero
+        f1 = 2 * precision * recall / (precision + recall + 0.0000001)  # +0.0000001 to avoid divide by zero
+        print("F1 score of validation data: " + str(f1))
+
     # We will replicate the model structure for the training subgraph, as well
     # as the evaluation subgraphs, while sharing the trainable parameters.
     def model(data, train=False):
@@ -632,6 +671,10 @@ def main(argv=None):  # pylint: disable=unused-argument
                 #save_path = saver.save(s, FLAGS.train_dir + "/model.ckpt")
                 save_path = saver.save(s, "stored_weights/model.ckpt")
                 print("Model saved in file: %s" % save_path)
+
+                # Compute f1
+                if iepoch%20==0 or iepoch==(num_epochs-1):
+                    validate()
 
         print("Running prediction on training set")
         prediction_training_dir = "predictions_training/"

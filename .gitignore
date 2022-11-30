@@ -13,3 +13,10 @@
 /conv_1/predictions_training/
 /conv_1/stored_weights/
 /conv_1/stored_weights/
+/conv_2/test_set_images/
+/conv_2/training/
+/conv_3/test_set_images/
+/conv_3/training/
+/conv_2/stored_weights/
+/baseline_conv_network/stored_weights/
+/conv_3/stored_weights/

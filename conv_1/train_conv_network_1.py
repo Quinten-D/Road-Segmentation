@@ -20,7 +20,7 @@ NUM_LABELS = 2
 TRAINING_SIZE = 20
 VALIDATION_SIZE = 5  # Size of the validation set.
 SEED = 66478  # Set to None for random seed.
-BATCH_SIZE = 16  # 64
+BATCH_SIZE = 40#16  # 64
 NUM_EPOCHS = 100
 RESTORE_MODEL = False  # If True, restore existing model instead of training a new one
 RECORDING_STEP = 0
@@ -336,10 +336,14 @@ def main(argv=None):  # pylint: disable=unused-argument
     conv2_expected_variance = tf.Variable(tf.zeros([64]))
 
     # Variables to hold parameters for the batch normalization layers
-    bn_scale_1 = tf.Variable(1.0)
-    bn_offset_1 = tf.Variable(0.0)
-    bn_scale_2 = tf.Variable(1.0)
-    bn_offset_2 = tf.Variable(0.1)
+    #bn_scale_1 = tf.Variable(1.0)
+    bn_scale_1 = tf.Variable(tf.ones([32]))
+    #bn_offset_1 = tf.Variable(0.0)
+    bn_offset_1 = tf.Variable(tf.constant(0.0, shape=[32]))
+    #bn_scale_2 = tf.Variable(1.0)
+    bn_scale_2 = tf.Variable(tf.ones([64]))
+    #bn_offset_2 = tf.Variable(0.1)
+    bn_offset_2 = tf.Variable(tf.constant(0.1, shape=[64]))
 
     # True when inference is needed (important for batch normalization)
     inference_mode = tf.Variable(False)
@@ -457,10 +461,6 @@ def main(argv=None):  # pylint: disable=unused-argument
         false_neg = 0
         print("image pred")
         print(to_1d_patch_labels(get_prediction(mpimg.imread(unseen_train_data_filenames[0]))))
-        print("scalar 1")
-        print(bn_scale_1.eval())
-        print("scale 2")
-        print(bn_scale_2.eval())
         for i, unseen_file in enumerate(unseen_train_data_filenames):
             image_prediction = get_prediction(mpimg.imread(unseen_file))
             ground_truth = mpimg.imread(unseen_train_labels_filenames[i])
@@ -473,12 +473,9 @@ def main(argv=None):  # pylint: disable=unused-argument
         accuracy_on_unseen_data = numpy.mean(numpy.array(accuracys))
         print("Accuracy on validation data: " + str(accuracy_on_unseen_data))
         # Compute f1
-        #print("true pos and flase pos")
-        #print(true_pos)
-        #print(false_pos)
         precision = true_pos / (true_pos + false_pos + 1.)   # +1 to avoid divide by zero
         recall = true_pos / (true_pos + false_neg + 1.)      # +1 to avoid divide by zero
-        f1 = 2 * precision * recall / (precision + recall + 1.) # +1 to avoid divide by zero
+        f1 = 2 * precision * recall / (precision + recall + 0.0000001) # +1 to avoid divide by zero
         print("F1 score of validation data: " + str(f1))
         s.run(inference_mode.assign(False))
 
@@ -496,6 +493,7 @@ def main(argv=None):  # pylint: disable=unused-argument
                                     lambda: tf.nn.batch_normalization(conv, batch1_mean, batch1_variance, bn_scale_1, bn_offset_1, 1e-5))
         # Rectified linear non-linearity.
         relu = tf.nn.relu(bn)
+        #relu = tf.nn.relu(tf.nn.bias_add(conv, conv1_biases))
         # Max pooling. The kernel size spec {ksize} also follows the layout of
         # the data. Here we have a pooling window of 2, and a stride of 2.
         pool = tf.nn.max_pool(
@@ -508,6 +506,7 @@ def main(argv=None):  # pylint: disable=unused-argument
                      lambda: tf.nn.batch_normalization(conv2, conv2_expected_mean, conv2_expected_variance, bn_scale_2, bn_offset_2, 1e-5),
                      lambda: tf.nn.batch_normalization(conv2, batch2_mean, batch2_variance, bn_scale_2, bn_offset_2, 1e-5))
         relu2 = tf.nn.relu(bn2)
+        #relu2 = tf.nn.relu(tf.nn.bias_add(bn2, conv2_biases))
         #relu2 = tf.nn.relu(tf.nn.bias_add(conv2, conv2_biases))
         pool2 = tf.nn.max_pool(
             relu2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME"
@@ -748,8 +747,6 @@ def main(argv=None):  # pylint: disable=unused-argument
                 print("Model saved in file: %s" % save_path)
 
                 if iepoch%5==1:
-                    #print("jjkj")
-                    #print(conv2_expected_mean.eval())
                     validate()
 
             # Set the variable inference_mode to True and save all variables one last time to disk

@@ -20,3 +20,9 @@
 /conv_2/stored_weights/
 /baseline_conv_network/stored_weights/
 /conv_3/stored_weights/
+/Data/augmented_training/
+/conv_3/augmented_training/
+/conv_3/augmented_training.zip
+/conv_3/predictions_testing/
+/conv_3/predictions_testing/
+/conv_3/conv3_submission.csv

@@ -240,7 +240,7 @@ def run_train_model():
                   metrics=['accuracy'])
 
     # Run the training loop
-    model.fit(train_data, train_labels, epochs=10, batch_size=5, shuffle=True)
+    model.fit(train_data, train_labels, epochs=0, batch_size=5, shuffle=True)
 
     # Save the model
     model.save("baseline.model")

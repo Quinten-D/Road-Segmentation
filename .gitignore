@@ -27,4 +27,5 @@
 /conv_3/predictions_testing/
 /conv_3/conv3_submission.csv
 /encoder/augmented_training/
-/keras1/
+/keras1/augmented_training/
+/keras1/baseline.model/

@@ -4,11 +4,8 @@ import sys
 import urllib
 import matplotlib.image as mpimg
 from PIL import Image
-
 import code
-
 import tensorflow.python.platform
-
 import numpy
 #import tensorflow as tf        # switch to older version of tensorflow
 import tensorflow.compat.v1 as tf
@@ -17,14 +14,13 @@ tf.disable_eager_execution()
 NUM_CHANNELS = 3  # RGB images
 PIXEL_DEPTH = 255
 NUM_LABELS = 2
-TRAINING_SIZE = 1000#20
+TRAINING_SIZE = 200#20
 VALIDATION_SIZE = 5  # Size of the validation set.
 SEED = 66478  # Set to None for random seed.
 BATCH_SIZE = 16  # 64
 NUM_EPOCHS = 100
 RESTORE_MODEL = False  # If True, restore existing model instead of training a new one
 RECORDING_STEP = 0
-
 # Set image patch size in pixels
 # IMG_PATCH_SIZE should be a multiple of 4
 # image size should be an integer multiple of this number!
@@ -76,7 +72,8 @@ def extract_data(filename, num_images):
     N_PATCHES_PER_IMAGE = (IMG_WIDTH / IMG_PATCH_SIZE) * (IMG_HEIGHT / IMG_PATCH_SIZE)
 
     img_patches = [
-        img_crop(imgs[i], IMG_PATCH_SIZE, IMG_PATCH_SIZE) for i in range(num_images)
+        #img_crop(imgs[i], IMG_PATCH_SIZE, IMG_PATCH_SIZE) for i in range(num_images)
+        img_crop(imgs[i], 256, 256) for i in range(num_images)
     ]
     data = [
         img_patches[i][j]
@@ -291,7 +288,8 @@ def main(argv=None):  # pylint: disable=unused-argument
     train_labels = extract_labels(train_labels_filename, TRAINING_SIZE)
 
     num_epochs = NUM_EPOCHS
-
+    train_size = train_data.shape[0]
+    """
     c0 = 0  # bgrd
     c1 = 0  # road
     for i in range(len(train_labels)):
@@ -300,7 +298,7 @@ def main(argv=None):  # pylint: disable=unused-argument
         else:
             c1 = c1 + 1
     print("Number of data points per class: c0 = " + str(c0) + " c1 = " + str(c1))
-
+    
     print("Balancing training data...")
     min_c = min(c0, c1)
     idx0 = [i for i, j in enumerate(train_labels) if j[0] == 1]
@@ -320,7 +318,7 @@ def main(argv=None):  # pylint: disable=unused-argument
             c0 = c0 + 1
         else:
             c1 = c1 + 1
-    print("Number of data points per class: c0 = " + str(c0) + " c1 = " + str(c1))
+    print("Number of data points per class: c0 = " + str(c0) + " c1 = " + str(c1))"""
 
     # This is where training samples and labels are fed to the graph.
     # These placeholder nodes will be fed a batch of training data at each
@@ -451,7 +449,7 @@ def main(argv=None):  # pylint: disable=unused-argument
             filename = "augmented_training/images/satImage_" + str(i)
             filename = filename + ".png"
             unseen_train_data_filenames.append(filename)
-        unseen_train_labels_filenames = []
+            unseen_train_labels_filenames = []
         for i in range(1751, 1800):
             filename = "augmented_training/groundtruth/satImage_" + str(i)
             filename = filename + ".png"
@@ -769,7 +767,7 @@ def main(argv=None):  # pylint: disable=unused-argument
                 oimg.save(prediction_training_dir + "overlay_" + str(i) + ".png")
 
 
-def run_train_conv_network_3():
+def run_train_encoder():
     tf.app.run()
 
 

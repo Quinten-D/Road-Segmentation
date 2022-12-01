@@ -26,3 +26,5 @@
 /conv_3/predictions_testing/
 /conv_3/predictions_testing/
 /conv_3/conv3_submission.csv
+/encoder/augmented_training/
+/keras1/

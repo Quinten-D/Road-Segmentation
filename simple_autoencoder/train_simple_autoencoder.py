@@ -13,7 +13,7 @@ tf.disable_eager_execution()
 NUM_CHANNELS = 3  # RGB images
 PIXEL_DEPTH = 255
 NUM_LABELS = 2
-TRAINING_SIZE = 32
+TRAINING_SIZE = 5#32
 VALIDATION_SIZE = 5  # Size of the validation set.
 SEED = 66478  # Set to None for random seed.
 BATCH_SIZE = 16  # 64
@@ -271,8 +271,8 @@ train_data = extract_data(train_data_filename, 1, TRAINING_SIZE)
 train_labels = extract_labels(train_labels_filename, 1, TRAINING_SIZE)
 
 # Get validation data and labels
-validation_data = extract_data(train_data_filename, 1751, 1800)
-validation_labels = extract_labels(train_labels_filename, 1751, 1800)
+validation_data = extract_data(train_data_filename, 1751, 1760)#1800)
+validation_labels = extract_labels(train_labels_filename, 1751, 1760)#1800)
 
 
 def run_train_model():
@@ -344,20 +344,39 @@ def run_train_model():
     model.add(tf.keras.layers.Reshape((65536, 2)))
 
 
-    """def my_loss(true_labels, prediction):
+    def my_loss(true_labels, prediction):
+        batch_size = tf.shape(prediction)[0]
+        print(tf.shape(prediction))
         print(prediction.shape)
-        prediction_list_form = tf.concat([prediction[0], prediction[1]], 2)
-        print("kjkjk")
-        print(prediction_list_form.shape)
-        prediction_list_form = tf.reshape(prediction_list_form, (256, 2))
+        #prediction_list_form = tf.concat([prediction[0], prediction[1]], 2)
+        #print("kjkjk")
+        #print(prediction_list_form.shape)
+        #prediction_list_form = tf.reshape(prediction_list_form, (256, 2))
+        prediction_probs = tf.nn.softmax(prediction)
+        print(prediction_probs)
+        prediction_probs = tf.reshape(prediction_probs, (batch_size, 256, 256, 2))
+        print(prediction_probs)
+        one = tf.ones((batch_size, 256, 256, 2))
+        right_shifted = tf.roll(prediction_probs, shift=1, axis=2)
+        left_shifted = tf.roll(prediction_probs, shift=-1, axis=2)
+        up_shifted = tf.roll(prediction_probs, shift=-1, axis=1)
+        down_shifted = tf.roll(prediction_probs, shift=1, axis=1)
+        nb_of_bad_neighbours = prediction_probs * (one-right_shifted + one-left_shifted + one-up_shifted + one-down_shifted)
+        print(nb_of_bad_neighbours)
+        bad_pixels = tf.sigmoid(10.*(nb_of_bad_neighbours-1.75*one))
+        print(tf.reduce_mean(nb_of_bad_neighbours, [0, 1, 2]))
+        #ragged_loss = tf.reduce_mean(nb_of_bad_neighbours, [0, 1, 2])[0]
+        ragged_loss = tf.reduce_mean(bad_pixels, [0, 1, 2])[0]
+        print("kjkj")
+        print(ragged_loss)
         loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-        return loss(true_labels, prediction_list_form)"""
+        return loss(true_labels, prediction) + 0.1*ragged_loss
 
     # Define loss and optimizer
     loss_function = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
     opt = tf.keras.optimizers.SGD(learning_rate=0.01, momentum=0.0)
     model.compile(optimizer=opt,
-                  loss=loss_function,
+                  loss=my_loss,
                   metrics=['accuracy'])
 
     # Run the training loop
@@ -373,7 +392,7 @@ if __name__ == "__main__":
 
     run_train_model()
 
-    validate_model(validation_data , validation_labels)
+    #validate_model(validation_data , validation_labels)
 
 
 

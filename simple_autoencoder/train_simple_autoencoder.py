@@ -8,8 +8,9 @@ import code
 import tensorflow.python.platform
 import numpy
 #import tensorflow as tf        # switch to older version of tensorflow
-import tensorflow.compat.v1 as tf
-tf.disable_eager_execution()
+#import tensorflow.compat.v1 as tf
+import tensorflow as tf
+#tf.disable_eager_execution()
 NUM_CHANNELS = 3  # RGB images
 PIXEL_DEPTH = 255
 NUM_LABELS = 2
@@ -210,9 +211,11 @@ def validation_true_pos_false_pos_false_neg(prediction, groundtruth):
 
 def validate_model(validation_data, validation_labels):
     print("Validating model")
-    loaded_model = tf.keras.models.load_model("simple_autoencoder.model")
+    loaded_model = tf.keras.models.load_model("simple_autoencoder.model", compile=False)
     predictions = loaded_model.predict(validation_data)
-    #predictions = predictions.reshape((50, 256, 2))
+    #predictions = predictions.reshape((50, 256, 2))"""
+    """loaded_graph = tf.saved_model.load("my_model")
+    predictions = loaded_graph(validation_data).numpy()"""
     print(predictions.shape)
     #validation_labels = validation_labels.reshape((50, 256, 2))
     print(validation_labels.shape)
@@ -261,6 +264,36 @@ def validate_model(validation_data, validation_labels):
     # label_pic = Image.fromarray(label_pic, 'RGB')
     # label_pic.save('label0.png')
 
+def my_loss(true_labels, prediction):
+    batch_size = tf.shape(prediction)[0]
+    print(tf.shape(prediction))
+    print(prediction.shape)
+    # prediction_list_form = tf.concat([prediction[0], prediction[1]], 2)
+    # print("kjkjk")
+    # print(prediction_list_form.shape)
+    # prediction_list_form = tf.reshape(prediction_list_form, (256, 2))
+    prediction_probs = tf.nn.softmax(prediction)
+    print(prediction_probs)
+    prediction_probs = tf.reshape(prediction_probs, (batch_size, 256, 256, 2))
+    print(prediction_probs)
+    one = tf.ones((batch_size, 256, 256, 2))
+    right_shifted = tf.roll(prediction_probs, shift=1, axis=2)
+    left_shifted = tf.roll(prediction_probs, shift=-1, axis=2)
+    up_shifted = tf.roll(prediction_probs, shift=-1, axis=1)
+    down_shifted = tf.roll(prediction_probs, shift=1, axis=1)
+    nb_of_bad_neighbours = prediction_probs * (
+                one - right_shifted + one - left_shifted + one - up_shifted + one - down_shifted)
+    print(nb_of_bad_neighbours)
+    bad_pixels = tf.sigmoid(10. * (nb_of_bad_neighbours - 1.75 * one))
+    print(tf.reduce_mean(nb_of_bad_neighbours, [0, 1, 2]))
+    # ragged_loss = tf.reduce_mean(nb_of_bad_neighbours, [0, 1, 2])[0]
+    #ragged_loss = tf.reduce_mean(bad_pixels, [0, 1, 2])[0]
+    ragged_loss = tf.reduce_mean(tf.reduce_sum(bad_pixels, [1, 2]), 0)[0]
+    print("kjkj")
+    print(ragged_loss)
+    loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
+    return loss(true_labels, prediction) + 0.1 * ragged_loss
+
 
 # Get test data and labels
 data_dir = "augmented_training/"
@@ -271,8 +304,8 @@ train_data = extract_data(train_data_filename, 1, TRAINING_SIZE)
 train_labels = extract_labels(train_labels_filename, 1, TRAINING_SIZE)
 
 # Get validation data and labels
-validation_data = extract_data(train_data_filename, 1751, 1760)#1800)
-validation_labels = extract_labels(train_labels_filename, 1751, 1760)#1800)
+validation_data = extract_data(train_data_filename, 1751, 1800)
+validation_labels = extract_labels(train_labels_filename, 1751, 1800)
 
 
 def run_train_model():
@@ -344,34 +377,6 @@ def run_train_model():
     model.add(tf.keras.layers.Reshape((65536, 2)))
 
 
-    def my_loss(true_labels, prediction):
-        batch_size = tf.shape(prediction)[0]
-        print(tf.shape(prediction))
-        print(prediction.shape)
-        #prediction_list_form = tf.concat([prediction[0], prediction[1]], 2)
-        #print("kjkjk")
-        #print(prediction_list_form.shape)
-        #prediction_list_form = tf.reshape(prediction_list_form, (256, 2))
-        prediction_probs = tf.nn.softmax(prediction)
-        print(prediction_probs)
-        prediction_probs = tf.reshape(prediction_probs, (batch_size, 256, 256, 2))
-        print(prediction_probs)
-        one = tf.ones((batch_size, 256, 256, 2))
-        right_shifted = tf.roll(prediction_probs, shift=1, axis=2)
-        left_shifted = tf.roll(prediction_probs, shift=-1, axis=2)
-        up_shifted = tf.roll(prediction_probs, shift=-1, axis=1)
-        down_shifted = tf.roll(prediction_probs, shift=1, axis=1)
-        nb_of_bad_neighbours = prediction_probs * (one-right_shifted + one-left_shifted + one-up_shifted + one-down_shifted)
-        print(nb_of_bad_neighbours)
-        bad_pixels = tf.sigmoid(10.*(nb_of_bad_neighbours-1.75*one))
-        print(tf.reduce_mean(nb_of_bad_neighbours, [0, 1, 2]))
-        #ragged_loss = tf.reduce_mean(nb_of_bad_neighbours, [0, 1, 2])[0]
-        ragged_loss = tf.reduce_mean(bad_pixels, [0, 1, 2])[0]
-        print("kjkj")
-        print(ragged_loss)
-        loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-        return loss(true_labels, prediction) + 0.1*ragged_loss
-
     # Define loss and optimizer
     loss_function = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
     opt = tf.keras.optimizers.SGD(learning_rate=0.01, momentum=0.0)
@@ -383,6 +388,7 @@ def run_train_model():
     model.fit(train_data, train_labels, epochs=3, batch_size=16, shuffle=True)
 
     # Save the model
+    #tf.saved_model.save(model, "my_model")
     model.save("simple_autoencoder.model")
 
 
@@ -392,7 +398,7 @@ if __name__ == "__main__":
 
     run_train_model()
 
-    #validate_model(validation_data , validation_labels)
+    validate_model(validation_data , validation_labels)
 
 
 

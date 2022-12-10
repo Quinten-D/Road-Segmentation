@@ -8,13 +8,12 @@ import code
 import tensorflow.python.platform
 import numpy
 #import tensorflow as tf        # switch to older version of tensorflow
-#import tensorflow.compat.v1 as tf
-import tensorflow as tf
-#tf.disable_eager_execution()
+import tensorflow.compat.v1 as tf
+tf.disable_eager_execution()
 NUM_CHANNELS = 3  # RGB images
 PIXEL_DEPTH = 255
 NUM_LABELS = 2
-TRAINING_SIZE = 16#32
+TRAINING_SIZE = 1800
 VALIDATION_SIZE = 5  # Size of the validation set.
 SEED = 66478  # Set to None for random seed.
 BATCH_SIZE = 16  # 64
@@ -80,15 +79,6 @@ def value_to_class(v):
     else:  # bgrd
         return [1, 0]
 
-def to_one_hot_labels(list):
-    return_list = []
-    for item in list:
-        if item >= 0.7:
-            return_list.append([0, 1])
-        else:
-            return_list.append([1, 0])
-    return return_list
-
 # Extract label images
 def extract_labels(filename, first_index, last_index):
     """Extract the labels into a 1-hot matrix [image index, label index]."""
@@ -105,12 +95,19 @@ def extract_labels(filename, first_index, last_index):
             print("File " + image_filename + " does not exist")
 
     num_images = len(gt_imgs)
-    one_hot_labels = [
-        #img_crop(gt_imgs[i], IMG_PATCH_SIZE, IMG_PATCH_SIZE) for i in range(last_index + 1 - first_index)
+    gt_patches = [
+        img_crop(gt_imgs[i], IMG_PATCH_SIZE, IMG_PATCH_SIZE) for i in range(last_index + 1 - first_index)
         #img_crop(gt_imgs[i], 1, 1) for i in range(last_index + 1 - first_index)
-        to_one_hot_labels(numpy.asarray(image).flatten()) for image in gt_imgs
     ]
-    labels = numpy.asarray(one_hot_labels)
+    labels = []
+    for image in gt_patches:
+        #i = image[0]
+        #c = numpy.mean(image[0])
+        image_labels = [
+            value_to_class(numpy.mean(image[i])) for i in range(len(image))
+        ]
+        labels.append(image_labels)
+    labels = numpy.asarray(labels)
     # Convert to dense 1-hot representation.
     return labels.astype(numpy.float32)
 
@@ -152,13 +149,12 @@ def validation_true_pos_false_pos_false_neg(prediction, groundtruth):
             true_pos+=1
     return true_pos, false_pos, false_neg
 
+
 def validate_model(validation_data, validation_labels):
     print("Validating model")
-    loaded_model = tf.keras.models.load_model("simple_autoencoder.model", compile=False)
+    loaded_model = tf.keras.models.load_model("encoder.model")
     predictions = loaded_model.predict(validation_data)
-    #predictions = predictions.reshape((50, 256, 2))"""
-    """loaded_graph = tf.saved_model.load("my_model")
-    predictions = loaded_graph(validation_data).numpy()"""
+    #predictions = predictions.reshape((50, 256, 2))
     print(predictions.shape)
     #validation_labels = validation_labels.reshape((50, 256, 2))
     print(validation_labels.shape)
@@ -168,8 +164,7 @@ def validate_model(validation_data, validation_labels):
     false_pos = 0
     false_neg = 0
     print("image pred")
-    print(predictions[0])
-    print("my loss of first image: " + str(my_loss([validation_labels[0]], [predictions[0]])))
+    print(predictions[1])
     for i in range(len(predictions)):
         image_prediction = predictions[i]
         ground_truth = validation_labels[i]
@@ -189,10 +184,10 @@ def validate_model(validation_data, validation_labels):
 
     #save some of the predictions
     for counter in range(10):
-        gt_img_3c = numpy.zeros((256, 256, 3), dtype=numpy.uint8)
-        gt_img8 = img_float_to_uint8(predictions[counter].reshape((256, 256, 2)))
-        for i in range(256):
-            for j in range(256):
+        gt_img_3c = numpy.zeros((16, 16, 3), dtype=numpy.uint8)
+        gt_img8 = img_float_to_uint8(predictions[counter].reshape((16, 16, 2)))
+        for i in range(16):
+            for j in range(16):
                 no_road = gt_img8[i][j][0]
                 road = gt_img8[i][j][1]
                 if no_road>=road:
@@ -204,29 +199,34 @@ def validate_model(validation_data, validation_labels):
         label_pic = Image.fromarray(gt_img_3c, 'RGB')
         label_pic.save('validation_prediction_' + str(1751+counter) + '.png')
 
-def my_loss(true_labels, prediction):
-    batch_size = tf.shape(prediction)[0]
-    print("start my loss computation")
-    prediction_probs = tf.nn.softmax(prediction)
-    prediction_probs = tf.reshape(prediction_probs, (batch_size, 256, 256, 2))
-    one = tf.ones((batch_size, 256, 256, 2))
-    right_shifted = tf.roll(prediction_probs, shift=1, axis=2)
-    left_shifted = tf.roll(prediction_probs, shift=-1, axis=2)
-    up_shifted = tf.roll(prediction_probs, shift=-1, axis=1)
-    down_shifted = tf.roll(prediction_probs, shift=1, axis=1)
-    nb_of_bad_neighbours = prediction_probs * (
-                one - right_shifted + one - left_shifted + one - up_shifted + one - down_shifted)
-    #print(tf.reduce_mean(tf.reduce_sum(prediction_probs, [1, 2]), 0))
-    #print(tf.reduce_mean(tf.reduce_sum(nb_of_bad_neighbours, [1, 2]), 0))
-    bad_pixels = tf.sigmoid(10. * (nb_of_bad_neighbours - 1.75 * one))
-    #print(bad_pixels)
-    #ragged_loss = tf.reduce_mean(nb_of_bad_neighbours, [0, 1, 2])[0]
-    #ragged_loss = tf.reduce_mean(bad_pixels, [0, 1, 2])[0]
-    ragged_loss = tf.reduce_mean(tf.reduce_sum(bad_pixels, [1, 2]), 0)[0]
-    print("ragged loss")
-    print(ragged_loss)
-    loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-    return loss(true_labels, prediction) + 0.1 * ragged_loss
+def keras_validation(y_true, y_pred):
+    predictions = y_pred
+    validation_labels = y_true
+    print("Validating model")
+    # start computation of f1 and accuracy
+    accuracys = []
+    true_pos = 0
+    false_pos = 0
+    false_neg = 0
+    print("image pred")
+    print(predictions[1])
+    for i in range(len(predictions)):
+        image_prediction = predictions[i]
+        ground_truth = validation_labels[i]
+        accuracys.append(validation_accuracy(image_prediction, ground_truth))
+        true_p, false_p, false_n = validation_true_pos_false_pos_false_neg(image_prediction, ground_truth)
+        true_pos += true_p
+        false_pos += false_p
+        false_neg += false_n
+        # print(true_pos, false_pos)
+    accuracy_on_unseen_data = numpy.mean(numpy.array(accuracys))
+    print("Accuracy on validation data: " + str(accuracy_on_unseen_data))
+    # Compute f1
+    precision = true_pos / (true_pos + false_pos + 1.)  # +1 to avoid divide by zero
+    recall = true_pos / (true_pos + false_neg + 1.)  # +1 to avoid divide by zero
+    f1 = 2 * precision * recall / (precision + recall + 0.0000001)  # +0.0000001 to avoid divide by zero
+    print("F1 score of validation data: " + str(f1))
+    return f1
 
 
 # Get test data and labels
@@ -238,14 +238,13 @@ train_data = extract_data(train_data_filename, 1, TRAINING_SIZE)
 train_labels = extract_labels(train_labels_filename, 1, TRAINING_SIZE)
 
 # Get validation data and labels
-validation_data = extract_data(train_data_filename, 1751, 1800)
-validation_labels = extract_labels(train_labels_filename, 1751, 1800)
+validation_data = extract_data(train_data_filename, 1451, 1800)
+validation_labels = extract_labels(train_labels_filename, 1451, 1800)
 
 
 def run_train_model():
     # Define model
     model = tf.keras.models.Sequential()
-    # Encoder
     model.add(tf.keras.layers.Conv2D(input_shape=(256, 256, 3), filters=16, kernel_size=5, padding="same"))
     model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.Activation('relu'))
@@ -262,59 +261,43 @@ def run_train_model():
     model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.Activation('relu'))
     model.add(tf.keras.layers.MaxPooling2D((2, 2)))
-    # Decoder
-    model.add(tf.keras.layers.UpSampling2D((2, 2)))
-    model.add(tf.keras.layers.Conv2D(filters=64, kernel_size=5, padding="same"))
-    model.add(tf.keras.layers.BatchNormalization())
-    model.add(tf.keras.layers.Activation('relu'))
-    model.add(tf.keras.layers.UpSampling2D((2, 2)))
-    model.add(tf.keras.layers.Conv2D(filters=32, kernel_size=5, padding="same"))
-    model.add(tf.keras.layers.BatchNormalization())
-    model.add(tf.keras.layers.Activation('relu'))
-    model.add(tf.keras.layers.UpSampling2D((2, 2)))
-    model.add(tf.keras.layers.Conv2D(filters=16, kernel_size=5, padding="same"))
-    model.add(tf.keras.layers.BatchNormalization())
-    model.add(tf.keras.layers.Activation('relu'))
-    model.add(tf.keras.layers.UpSampling2D((2, 2)))
-    model.add(tf.keras.layers.Conv2D(filters=2, kernel_size=5, padding="same", use_bias=True))  #, activation='relu'
-    # Flatten
-    model.add(tf.keras.layers.Reshape((65536, 2)))
+    model.add(tf.keras.layers.Conv2D(filters=2, kernel_size=5, activation='relu', padding="same", use_bias=True))
+    model.add(tf.keras.layers.Reshape((256, 2)))
 
     # Define loss and optimizer
     loss_function = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
     opt = tf.keras.optimizers.SGD(learning_rate=0.01, momentum=0.0)
     model.compile(optimizer=opt,
-                  loss=my_loss,
-                  metrics=['accuracy'])
+                  loss=loss_function,
+                  metrics=['accuracy', tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
 
     # Run the training loop
-    model.fit(train_data, train_labels, epochs=0, batch_size=16, shuffle=True)
+    model.fit(train_data, train_labels, validation_split=0.2, epochs=137, batch_size=16, shuffle=True)
 
     # Save the model
-    #tf.saved_model.save(model, "my_model")
-    model.save("simple_autoencoder.model")
+    model.save("encoder.model")
 
 
 if __name__ == "__main__":
-    #run_train_model()
-    validate_model(validation_data, validation_labels)
+    run_train_model()
+    validate_model(validation_data , validation_labels)
 
 
 
-
-    """print(train_data.shape)
+    """
+    print(train_data.shape)
     print(train_labels.shape)
-    pic = img_float_to_uint8(train_data[0])
+    pic = img_float_to_uint8(train_data[13])
     pic = Image.fromarray(pic, 'RGB')
     pic.save('test0.png')
 
-    gt_img_3c = numpy.zeros((256, 256, 3), dtype=numpy.uint8)
-    gt_img8 = img_float_to_uint8(train_labels[0].reshape((256, 256, 2)))
+    gt_img_3c = numpy.zeros((16, 16, 3), dtype=numpy.uint8)
+    gt_img8 = img_float_to_uint8(train_labels[13].reshape((16, 16, 2)))
     #gt_img_3c[:, :, 0] = gt_img8
     #gt_img_3c[:, :, 1] = gt_img8
     #gt_img_3c[:, :, 2] = gt_img8
-    for i in range(256):
-        for j in range(256):
+    for i in range(16):
+        for j in range(16):
             gt_img_3c[i][j] = [gt_img8[i][j][0], gt_img8[i][j][1], 0.]
     gt_img_3c = img_float_to_uint8(gt_img_3c)
     label_pic = Image.fromarray(gt_img_3c, 'RGB')
@@ -322,5 +305,5 @@ if __name__ == "__main__":
 
     #label_pic = img_float_to_uint8(train_labels[0].reshape((16, 16, 2)))
     #label_pic = Image.fromarray(label_pic, 'RGB')
-    #label_pic.save('label0.png')"""
-
+    #label_pic.save('label0.png')
+    """

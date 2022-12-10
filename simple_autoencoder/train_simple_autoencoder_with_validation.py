@@ -14,7 +14,7 @@ import tensorflow as tf
 NUM_CHANNELS = 3  # RGB images
 PIXEL_DEPTH = 255
 NUM_LABELS = 2
-TRAINING_SIZE = 16#32
+TRAINING_SIZE = 5#32
 VALIDATION_SIZE = 5  # Size of the validation set.
 SEED = 66478  # Set to None for random seed.
 BATCH_SIZE = 16  # 64
@@ -106,8 +106,6 @@ def extract_labels(filename, first_index, last_index):
 
     num_images = len(gt_imgs)
     one_hot_labels = [
-        #img_crop(gt_imgs[i], IMG_PATCH_SIZE, IMG_PATCH_SIZE) for i in range(last_index + 1 - first_index)
-        #img_crop(gt_imgs[i], 1, 1) for i in range(last_index + 1 - first_index)
         to_one_hot_labels(numpy.asarray(image).flatten()) for image in gt_imgs
     ]
     labels = numpy.asarray(one_hot_labels)
@@ -169,7 +167,6 @@ def validate_model(validation_data, validation_labels):
     false_neg = 0
     print("image pred")
     print(predictions[0])
-    print("my loss of first image: " + str(my_loss([validation_labels[0]], [predictions[0]])))
     for i in range(len(predictions)):
         image_prediction = predictions[i]
         ground_truth = validation_labels[i]
@@ -203,30 +200,6 @@ def validate_model(validation_data, validation_labels):
         gt_img_3c = img_float_to_uint8(gt_img_3c)
         label_pic = Image.fromarray(gt_img_3c, 'RGB')
         label_pic.save('validation_prediction_' + str(1751+counter) + '.png')
-
-def my_loss(true_labels, prediction):
-    batch_size = tf.shape(prediction)[0]
-    print("start my loss computation")
-    prediction_probs = tf.nn.softmax(prediction)
-    prediction_probs = tf.reshape(prediction_probs, (batch_size, 256, 256, 2))
-    one = tf.ones((batch_size, 256, 256, 2))
-    right_shifted = tf.roll(prediction_probs, shift=1, axis=2)
-    left_shifted = tf.roll(prediction_probs, shift=-1, axis=2)
-    up_shifted = tf.roll(prediction_probs, shift=-1, axis=1)
-    down_shifted = tf.roll(prediction_probs, shift=1, axis=1)
-    nb_of_bad_neighbours = prediction_probs * (
-                one - right_shifted + one - left_shifted + one - up_shifted + one - down_shifted)
-    #print(tf.reduce_mean(tf.reduce_sum(prediction_probs, [1, 2]), 0))
-    #print(tf.reduce_mean(tf.reduce_sum(nb_of_bad_neighbours, [1, 2]), 0))
-    bad_pixels = tf.sigmoid(10. * (nb_of_bad_neighbours - 1.75 * one))
-    #print(bad_pixels)
-    #ragged_loss = tf.reduce_mean(nb_of_bad_neighbours, [0, 1, 2])[0]
-    #ragged_loss = tf.reduce_mean(bad_pixels, [0, 1, 2])[0]
-    ragged_loss = tf.reduce_mean(tf.reduce_sum(bad_pixels, [1, 2]), 0)[0]
-    print("ragged loss")
-    print(ragged_loss)
-    loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-    return loss(true_labels, prediction) + 0.1 * ragged_loss
 
 
 # Get test data and labels
@@ -280,24 +253,24 @@ def run_train_model():
     # Flatten
     model.add(tf.keras.layers.Reshape((65536, 2)))
 
+
     # Define loss and optimizer
     loss_function = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
     opt = tf.keras.optimizers.SGD(learning_rate=0.01, momentum=0.0)
     model.compile(optimizer=opt,
-                  loss=my_loss,
+                  loss=loss_function,
                   metrics=['accuracy'])
 
     # Run the training loop
-    model.fit(train_data, train_labels, epochs=0, batch_size=16, shuffle=True)
+    model.fit(train_data, train_labels, validation_split=0.1, epochs=3, batch_size=16, shuffle=True)
 
     # Save the model
-    #tf.saved_model.save(model, "my_model")
     model.save("simple_autoencoder.model")
 
 
 if __name__ == "__main__":
-    #run_train_model()
-    validate_model(validation_data, validation_labels)
+    run_train_model()
+    validate_model(validation_data , validation_labels)
 
 
 

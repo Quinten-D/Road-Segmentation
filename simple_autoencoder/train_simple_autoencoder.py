@@ -1,3 +1,8 @@
+"""
+This file contains code fragments from the Baseline for machine learning project on road segmentation.
+Credits: Aurelien Lucchi, ETH Zürich
+"""
+
 import gzip
 import os
 import sys
@@ -11,16 +16,13 @@ import numpy
 #import tensorflow.compat.v1 as tf
 import tensorflow as tf
 #tf.disable_eager_execution()
-NUM_CHANNELS = 3  # RGB images
+
+
 PIXEL_DEPTH = 255
-NUM_LABELS = 2
-TRAINING_SIZE = 16#32
-VALIDATION_SIZE = 5  # Size of the validation set.
-SEED = 66478  # Set to None for random seed.
+TRAINING_SIZE = 32  # Number of training samples, max 1800, Training data = 1 to TRAINING_SIZE
+INDEX_OF_FIRST_VALIDATION_SAMPLE = 1751  # Validation data = INDEX_OF_FIRST_VALIDATION_SAMPLE to 1800
 BATCH_SIZE = 16  # 64
-NUM_EPOCHS = 100
-RESTORE_MODEL = False  # If True, restore existing model instead of training a new one
-RECORDING_STEP = 0
+NUM_EPOCHS = 3
 # Set image patch size in pixels
 # IMG_PATCH_SIZE should be a multiple of 4
 # image size should be an integer multiple of this number!
@@ -159,17 +161,17 @@ def validate_model(validation_data, validation_labels):
     #predictions = predictions.reshape((50, 256, 2))"""
     """loaded_graph = tf.saved_model.load("my_model")
     predictions = loaded_graph(validation_data).numpy()"""
-    print(predictions.shape)
+    #print(predictions.shape)
     #validation_labels = validation_labels.reshape((50, 256, 2))
-    print(validation_labels.shape)
+    #print(validation_labels.shape)
     # start computation of f1 and accuracy
     accuracys = []
     true_pos = 0
     false_pos = 0
     false_neg = 0
-    print("image pred")
-    print(predictions[0])
-    print("my loss of first image: " + str(my_loss([validation_labels[0]], [predictions[0]])))
+    #print("image pred")
+    #print(predictions[0])
+    #print("my loss of first image: " + str(my_loss([validation_labels[0]], [predictions[0]])))
     for i in range(len(predictions)):
         image_prediction = predictions[i]
         ground_truth = validation_labels[i]
@@ -226,10 +228,10 @@ def my_loss(true_labels, prediction):
     print("ragged loss")
     print(ragged_loss)
     loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-    return loss(true_labels, prediction) + 0.1 * ragged_loss
+    return loss(true_labels, prediction) + 0.001 * ragged_loss
 
 
-# Get test data and labels
+# Get train data and labels
 data_dir = "augmented_training/"
 train_data_filename = data_dir + "images/"
 train_labels_filename = data_dir + "groundtruth/"
@@ -238,8 +240,8 @@ train_data = extract_data(train_data_filename, 1, TRAINING_SIZE)
 train_labels = extract_labels(train_labels_filename, 1, TRAINING_SIZE)
 
 # Get validation data and labels
-validation_data = extract_data(train_data_filename, 1751, 1800)
-validation_labels = extract_labels(train_labels_filename, 1751, 1800)
+validation_data = extract_data(train_data_filename, INDEX_OF_FIRST_VALIDATION_SAMPLE, 1800)
+validation_labels = extract_labels(train_labels_filename, INDEX_OF_FIRST_VALIDATION_SAMPLE, 1800)
 
 
 def run_train_model():
@@ -288,7 +290,7 @@ def run_train_model():
                   metrics=['accuracy'])
 
     # Run the training loop
-    model.fit(train_data, train_labels, epochs=0, batch_size=16, shuffle=True)
+    model.fit(train_data, train_labels, epochs=NUM_EPOCHS, batch_size=BATCH_SIZE, shuffle=True)
 
     # Save the model
     #tf.saved_model.save(model, "my_model")
@@ -296,31 +298,7 @@ def run_train_model():
 
 
 if __name__ == "__main__":
-    #run_train_model()
+    run_train_model()
     validate_model(validation_data, validation_labels)
 
-
-
-
-    """print(train_data.shape)
-    print(train_labels.shape)
-    pic = img_float_to_uint8(train_data[0])
-    pic = Image.fromarray(pic, 'RGB')
-    pic.save('test0.png')
-
-    gt_img_3c = numpy.zeros((256, 256, 3), dtype=numpy.uint8)
-    gt_img8 = img_float_to_uint8(train_labels[0].reshape((256, 256, 2)))
-    #gt_img_3c[:, :, 0] = gt_img8
-    #gt_img_3c[:, :, 1] = gt_img8
-    #gt_img_3c[:, :, 2] = gt_img8
-    for i in range(256):
-        for j in range(256):
-            gt_img_3c[i][j] = [gt_img8[i][j][0], gt_img8[i][j][1], 0.]
-    gt_img_3c = img_float_to_uint8(gt_img_3c)
-    label_pic = Image.fromarray(gt_img_3c, 'RGB')
-    label_pic.save('label0.png')
-
-    #label_pic = img_float_to_uint8(train_labels[0].reshape((16, 16, 2)))
-    #label_pic = Image.fromarray(label_pic, 'RGB')
-    #label_pic.save('label0.png')"""
 

@@ -1,3 +1,8 @@
+"""
+This file contains code fragments from the Baseline for machine learning project on road segmentation.
+Credits: Aurelien Lucchi, ETH Zürich
+"""
+
 import gzip
 import os
 import sys

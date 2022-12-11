@@ -1,3 +1,8 @@
+"""
+This file contains code fragments from the Baseline for machine learning project on road segmentation.
+Credits: Aurelien Lucchi, ETH Zürich
+"""
+
 import gzip
 import os
 import sys
@@ -10,16 +15,14 @@ import numpy
 #import tensorflow as tf        # switch to older version of tensorflow
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
-NUM_CHANNELS = 3  # RGB images
+
+
 PIXEL_DEPTH = 255
-NUM_LABELS = 2
-TRAINING_SIZE = 1800
-VALIDATION_SIZE = 5  # Size of the validation set.
-SEED = 66478  # Set to None for random seed.
+TRAINING_SIZE = 32  # Number of training samples, max 1800, Training data = 1 to TRAINING_SIZE
+INDEX_OF_FIRST_VALIDATION_SAMPLE = 1451  # Validation data = INDEX_OF_FIRST_VALIDATION_SAMPLE to 1800
+VALIDATION_SPLIT = 0.2 # The 100*VALIDATION_SPLIT percent of the training data will be used as validation during training
 BATCH_SIZE = 16  # 64
-NUM_EPOCHS = 100
-RESTORE_MODEL = False  # If True, restore existing model instead of training a new one
-RECORDING_STEP = 0
+NUM_EPOCHS = 3
 # Set image patch size in pixels
 # IMG_PATCH_SIZE should be a multiple of 4
 # image size should be an integer multiple of this number!
@@ -149,22 +152,21 @@ def validation_true_pos_false_pos_false_neg(prediction, groundtruth):
             true_pos+=1
     return true_pos, false_pos, false_neg
 
-
 def validate_model(validation_data, validation_labels):
     print("Validating model")
     loaded_model = tf.keras.models.load_model("encoder.model")
     predictions = loaded_model.predict(validation_data)
     #predictions = predictions.reshape((50, 256, 2))
-    print(predictions.shape)
+    #print(predictions.shape)
     #validation_labels = validation_labels.reshape((50, 256, 2))
-    print(validation_labels.shape)
+    #print(validation_labels.shape)
     # start computation of f1 and accuracy
     accuracys = []
     true_pos = 0
     false_pos = 0
     false_neg = 0
-    print("image pred")
-    print(predictions[1])
+    #print("image pred")
+    #print(predictions[1])
     for i in range(len(predictions)):
         image_prediction = predictions[i]
         ground_truth = validation_labels[i]
@@ -199,37 +201,8 @@ def validate_model(validation_data, validation_labels):
         label_pic = Image.fromarray(gt_img_3c, 'RGB')
         label_pic.save('validation_prediction_' + str(1751+counter) + '.png')
 
-def keras_validation(y_true, y_pred):
-    predictions = y_pred
-    validation_labels = y_true
-    print("Validating model")
-    # start computation of f1 and accuracy
-    accuracys = []
-    true_pos = 0
-    false_pos = 0
-    false_neg = 0
-    print("image pred")
-    print(predictions[1])
-    for i in range(len(predictions)):
-        image_prediction = predictions[i]
-        ground_truth = validation_labels[i]
-        accuracys.append(validation_accuracy(image_prediction, ground_truth))
-        true_p, false_p, false_n = validation_true_pos_false_pos_false_neg(image_prediction, ground_truth)
-        true_pos += true_p
-        false_pos += false_p
-        false_neg += false_n
-        # print(true_pos, false_pos)
-    accuracy_on_unseen_data = numpy.mean(numpy.array(accuracys))
-    print("Accuracy on validation data: " + str(accuracy_on_unseen_data))
-    # Compute f1
-    precision = true_pos / (true_pos + false_pos + 1.)  # +1 to avoid divide by zero
-    recall = true_pos / (true_pos + false_neg + 1.)  # +1 to avoid divide by zero
-    f1 = 2 * precision * recall / (precision + recall + 0.0000001)  # +0.0000001 to avoid divide by zero
-    print("F1 score of validation data: " + str(f1))
-    return f1
 
-
-# Get test data and labels
+# Get train data and labels
 data_dir = "augmented_training/"
 train_data_filename = data_dir + "images/"
 train_labels_filename = data_dir + "groundtruth/"
@@ -238,8 +211,8 @@ train_data = extract_data(train_data_filename, 1, TRAINING_SIZE)
 train_labels = extract_labels(train_labels_filename, 1, TRAINING_SIZE)
 
 # Get validation data and labels
-validation_data = extract_data(train_data_filename, 1451, 1800)
-validation_labels = extract_labels(train_labels_filename, 1451, 1800)
+validation_data = extract_data(train_data_filename, INDEX_OF_FIRST_VALIDATION_SAMPLE, 1800)
+validation_labels = extract_labels(train_labels_filename, INDEX_OF_FIRST_VALIDATION_SAMPLE, 1800)
 
 
 def run_train_model():
@@ -272,7 +245,7 @@ def run_train_model():
                   metrics=['accuracy', tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
 
     # Run the training loop
-    model.fit(train_data, train_labels, validation_split=0.2, epochs=137, batch_size=16, shuffle=True)
+    model.fit(train_data, train_labels, validation_split=VALIDATION_SPLIT, epochs=NUM_EPOCHS, batch_size=BATCH_SIZE, shuffle=True)
 
     # Save the model
     model.save("encoder.model")

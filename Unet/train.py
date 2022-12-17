@@ -121,7 +121,7 @@ class Trainer:
 
                     tq.set_postfix({"loss": loss, "accuracy": accuracy, "f1": f1})
 
-        return [loss / self.train_steps, accuracy / self.train_steps, f1 / self.train_steps]
+        return [loss / self.valid_steps, accuracy / self.valid_steps, f1 / self.valid_steps]
 
     def train(self, epochs):
         t_start = time.time()

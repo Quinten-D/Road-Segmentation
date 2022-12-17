@@ -12,7 +12,7 @@ from images_dataset import ImagesDataset
 from unet import UNet
 from helpers import DiceLoss, accuracy_score_tensors, f1_score_tensors, train_test_split
 
-seed = 11
+seed = 0
 
 data_path = os.path.abspath("../Data/")
 models_path = os.path.abspath("models/")
@@ -70,7 +70,9 @@ class Trainer:
         """
         self.model.train()
 
-        loss = accuracy = f1 = 0.0
+        f1 = 0.0
+        loss = 0.0
+        accuracy = 0.0
         with self.tqdm(self.data_loader, desc=f'Training Epoch {epoch}', unit='batch', leave=False) as tq:
             tq.set_postfix({"loss": loss, "accuracy": accuracy, "f1": f1})
             for data, target in tq:
@@ -99,7 +101,9 @@ class Trainer:
         """
         self.model.eval()
 
-        loss = accuracy = f1 = 0.0
+        f1 = 0.0
+        loss = 0.0
+        accuracy = 0.0
         with torch.no_grad():
             with self.tqdm(self.valid_data_loader, desc=f'Validation epoch {epoch}',
                            unit='batch', leave=False) as tq:
@@ -130,7 +134,7 @@ class Trainer:
                 stats.update({"loss": train_loss, "accuracy": train_accuracy, "f1": train_f1})
 
                 if self.valid_data_loader is not None:
-                    [valid_loss, valid_accuracy, valid_f1] = self.train_epoch(epoch)
+                    [valid_loss, valid_accuracy, valid_f1] = self.valid_epoch(epoch)
                     stats.update({"loss": valid_loss, "accuracy": valid_accuracy, "f1": valid_f1})
                     if valid_f1 > max_f1:
                         max_f1 = valid_f1
@@ -150,7 +154,7 @@ class Trainer:
         print("Training took " + str(training_time) + " seconds")
 
 
-def train(batch_size=10, epochs=32, lr=1e-4, split_ratio=0.2, weight_decay=1e-4):
+def train(batch_size=10, epochs=50, lr=2e-4, split_ratio=0.15, weight_decay=1e-4):
     torch.manual_seed(seed)
 
     if not os.path.exists(models_path):
@@ -168,7 +172,8 @@ def train(batch_size=10, epochs=32, lr=1e-4, split_ratio=0.2, weight_decay=1e-4)
     )
     print('Size of dataset:', len(dataset))
 
-    train_loader = test_loader = None
+    train_loader = None
+    test_loader = None
     if split_ratio == 0:
         train_loader = DataLoader(
             dataset=dataset,

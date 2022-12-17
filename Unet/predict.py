@@ -11,7 +11,7 @@ from unet import UNet
 from images_dataset import ImagesDataset
 from helpers import make_img_overlays, masks_to_submission, submission_to_masks
 
-seed = 11
+seed = 0
 models_path = os.path.abspath("models/")
 model_path = os.path.join(models_path, 'unet30.pt')
 
@@ -31,7 +31,7 @@ def save_mask_as_image(tensor_output, filename):
     :param tensor_output:
     :param filename:
     """
-    predictions = torch.squeeze(tensor_output * 255).cpu().numpy()
+    predictions = torch.squeeze(tensor_output * 255).numpy()
     Image.fromarray(predictions).save(filename)
 
 
@@ -68,10 +68,9 @@ class Predictor:
         else:
             return f'prediction_{index + 1:04d}.png'
 
-    def predict(self, threshold, postprocess=True):
+    def predict(self, threshold):
         """Predicts the masks of images.
         :param threshold: Threshold to differentiate between 0 and 1
-        :param postprocess: True if we want to use postprocessing
         """
         self.model.eval()
         with torch.no_grad():
@@ -105,7 +104,7 @@ def get_predictions():
 
     print("Predicting...")
     predictor = Predictor(model, test_loader)
-    predictor.predict(0.2, True)
+    predictor.predict(0.2)
 
     print("Creating submission")
     masks_to_submission(

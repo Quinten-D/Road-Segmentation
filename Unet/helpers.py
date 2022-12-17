@@ -123,7 +123,7 @@ def accuracy_score_tensors(target, output):
 
     :return: Accuracy score in [0,1]
     """
-    return accuracy_score(torch.flatten(target).cpu(), torch.flatten(output).cpu(), normalize=True)
+    return accuracy_score(torch.flatten(target), torch.flatten(output), normalize=True)
 
 
 def f1_score_tensors(target, output):
@@ -133,14 +133,13 @@ def f1_score_tensors(target, output):
 
     :return: F1 score in [0,1]
     """
-    return f1_score(torch.flatten(target).cpu(), torch.flatten(output).cpu(), zero_division=1)
+    return f1_score(torch.flatten(target), torch.flatten(output), zero_division=1)
 
 
 def train_test_split(dataset, split_ratio):
     """
     :param dataset: A torch dataset
     :param split_ratio: The train/test split ratio
-    :param seed:
 
     :returns: A tuple consisting of the train and test datasets
     """

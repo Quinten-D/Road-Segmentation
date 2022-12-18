@@ -16,7 +16,7 @@ seed = 0
 
 data_path = os.path.abspath("../Data/")
 models_path = os.path.abspath("models/")
-model_path = os.path.join(models_path, 'unet.pt')
+model_path = os.path.join(models_path, 'unetBest.pt')
 
 data_train_path = os.path.join(data_path, 'augmented_training')
 grdTruth_path = os.path.join(data_train_path, 'groundtruth')

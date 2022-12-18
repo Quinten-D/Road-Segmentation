@@ -13,7 +13,7 @@ from helpers import make_img_overlays, masks_to_submission, submission_to_masks
 
 seed = 0
 models_path = os.path.abspath("models/")
-model_path = os.path.join(models_path, 'unet30.pt')
+model_path = os.path.join(models_path, 'unetBest.pt')
 
 output_path = os.path.abspath("out/")
 data_path = os.path.abspath("../Data/")

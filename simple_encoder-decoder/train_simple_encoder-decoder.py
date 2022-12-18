@@ -156,7 +156,7 @@ def validation_true_pos_false_pos_false_neg(prediction, groundtruth):
 
 def validate_model(validation_data, validation_labels):
     print("Validating model")
-    loaded_model = tf.keras.models.load_model("simple_autoencoder.model", compile=False)
+    loaded_model = tf.keras.models.load_model("simple_encoder-decoder.model", compile=False)
     predictions = loaded_model.predict(validation_data)
     #predictions = predictions.reshape((50, 256, 2))"""
     """loaded_graph = tf.saved_model.load("my_model")
@@ -294,7 +294,7 @@ def run_train_model():
 
     # Save the model
     #tf.saved_model.save(model, "my_model")
-    model.save("simple_autoencoder.model")
+    model.save("simple_encoder-decoder.model")
 
 
 if __name__ == "__main__":

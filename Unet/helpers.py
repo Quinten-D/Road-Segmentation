@@ -103,15 +103,14 @@ def masks_to_submission(submission_path, masks_paths):
 class DiceLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        self.smoothness = 1.0
 
     def forward(self, curInput, target):
         curInput = curInput.view(-1)
         target = target.view(-1)
         intersection = (curInput * target).sum()
 
-        num = 2.0 * intersection + self.smoothness
-        denom = curInput.sum() + target.sum() + self.smoothness
+        num = 2.0 * intersection + 1.0
+        denom = curInput.sum() + target.sum() + 1.0
 
         return 1 - num / denom
 

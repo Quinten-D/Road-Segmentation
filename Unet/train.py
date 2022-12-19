@@ -24,11 +24,11 @@ image_path = os.path.join(data_train_path, 'images')
 
 
 class Trainer:
-    def __init__(self, model, criterion, optimizer, weights_path, data_loader, lr_scheduler,
+    def __init__(self, model, lossF, optimizer, weights_path, data_loader, lr_scheduler,
                  valid_data_loader=None, threshold=0.25):
         """
         :param model: The NN Model (torch Module)
-        :param criterion: The loss function
+        :param lossF: The loss function
         :param optimizer: The optimizer function
         :param weights_path: The path to save the model
         :param data_loader:
@@ -41,7 +41,7 @@ class Trainer:
         self.lr_scheduler = lr_scheduler
 
         self.model = model
-        self.criterion = criterion
+        self.lossF = lossF
         self.optimizer = optimizer
         self.weights_path = weights_path
         self.data_loader = data_loader
@@ -73,22 +73,22 @@ class Trainer:
         f1 = 0.0
         loss = 0.0
         accuracy = 0.0
-        with self.tqdm(self.data_loader, desc=f'Training Epoch {epoch}', unit='batch', leave=False) as tq:
+        with self.tqdm(self.data_loader, desc=f'Training Epoch {epoch}', leave=False, unit='batch') as tq:
             tq.set_postfix({"loss": loss, "accuracy": accuracy, "f1": f1})
             for data, target in tq:
                 self.optimizer.zero_grad()
 
                 output = self.model(data)
-                cur_loss = self.criterion(output, target)
+                cur_loss = self.lossF(output, target)
                 cur_loss.backward()
                 self.optimizer.step()
 
                 output = self.predict_labels(output)
                 target = self.predict_labels(target)
 
-                loss += cur_loss.item()
-                f1 += f1_score_tensors(target, output)
                 accuracy += accuracy_score_tensors(target, output)
+                f1 += f1_score_tensors(target, output)
+                loss += cur_loss.item()
 
                 tq.set_postfix({"loss": loss, "accuracy": accuracy, "f1": f1})
 
@@ -110,7 +110,7 @@ class Trainer:
                 tq.set_postfix({"loss": loss, "accuracy": accuracy, "f1": f1})
                 for data, target in tq:
                     output = self.model(data)
-                    cur_loss = self.criterion(output, target)
+                    cur_loss = self.lossF(output, target)
 
                     output = self.predict_labels(output)
                     target = self.predict_labels(target)
@@ -163,14 +163,9 @@ def train(batch_size=10, epochs=50, lr=2e-4, split_ratio=0.15, weight_decay=1e-4
     dataset = ImagesDataset(
         image_dir=image_path,
         grdTruth_dir=grdTruth_path,
-        image_transform=transforms.Compose([
-            transforms.ToTensor(),
-        ]),
-        mask_transform=transforms.Compose([
-            transforms.ToTensor(),
-        ]),
+        image_transform=transforms.Compose([transforms.ToTensor()]),
+        mask_transform=transforms.Compose([transforms.ToTensor()]),
     )
-    print('Size of dataset:', len(dataset))
 
     train_loader = None
     test_loader = None
@@ -183,8 +178,6 @@ def train(batch_size=10, epochs=50, lr=2e-4, split_ratio=0.15, weight_decay=1e-4
         )
     else:
         train_set, test_set = train_test_split(dataset=dataset, split_ratio=split_ratio)
-        print('Train size:', len(train_set))
-        print('Test size:', len(test_set))
 
         train_loader = DataLoader(
             dataset=train_set,
@@ -204,7 +197,7 @@ def train(batch_size=10, epochs=50, lr=2e-4, split_ratio=0.15, weight_decay=1e-4
 
     trainer = Trainer(
         model=model,
-        criterion=DiceLoss(),
+        lossF=DiceLoss(),
         optimizer=optimizer,
         weights_path=model_path,
         data_loader=train_loader,
@@ -215,4 +208,4 @@ def train(batch_size=10, epochs=50, lr=2e-4, split_ratio=0.15, weight_decay=1e-4
 
 
 if __name__ == '__main__':
-    train()
+    train(split_ratio=0)

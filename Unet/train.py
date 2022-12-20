@@ -1,5 +1,4 @@
 import os
-import time
 import torch
 
 from torch.optim import Adam
@@ -124,8 +123,6 @@ class Trainer:
         return [loss / self.valid_steps, accuracy / self.valid_steps, f1 / self.valid_steps]
 
     def train(self, epochs):
-        t_start = time.time()
-
         max_f1 = 0.0
         stats = dict()
         with self.trange(1, epochs + 1, unit='epoch', desc='Training') as t:
@@ -148,10 +145,6 @@ class Trainer:
 
                 self.lr_scheduler.step(train_loss)
                 t.set_postfix(stats)
-
-        t_end = time.time()
-        training_time = t_end - t_start
-        print("Training took " + str(training_time) + " seconds")
 
 
 def train(batch_size=10, epochs=50, lr=2e-4, split_ratio=0.15, weight_decay=1e-4):

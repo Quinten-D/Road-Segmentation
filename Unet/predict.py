@@ -102,17 +102,13 @@ def get_predictions():
     model = UNet()
     model.load_state_dict(torch.load(model_path))
 
-    print("Predicting...")
     predictor = Predictor(model, test_loader)
     predictor.predict(0.2)
 
-    print("Creating submission")
     masks_to_submission(
         submission_path=submission_file_path,
         masks_paths=predictor.predictions_filenames
     )
-
-    print("Creating image overlays")
     submission_to_masks(submission_file_path, 50, submission_patch_path)
     make_img_overlays(data_test_images_path, submission_patch_path, submission_overlay_path)
 

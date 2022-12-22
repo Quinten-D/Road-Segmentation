@@ -15,7 +15,7 @@ models_path = os.path.abspath("models/")
 model_path = os.path.join(models_path, 'unetBest.pt')
 
 output_path = os.path.abspath("out/")
-data_path = os.path.abspath("../Data/")
+data_path = os.path.abspath("Data/")
 
 data_test_images_path = os.path.join(data_path, 'test_set_images')
 

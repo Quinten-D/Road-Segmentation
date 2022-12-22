@@ -10,7 +10,7 @@ from skimage import io
 from torch.utils.data import random_split
 from sklearn.metrics import accuracy_score, f1_score
 
-output_path = os.path.abspath("out/")
+output_path = os.path.abspath("Unet/out/")
 
 
 def binary_to_uint8(img):

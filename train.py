@@ -13,7 +13,7 @@ from helpers import DiceLoss, accuracy_score_tensors, f1_score_tensors, train_te
 
 seed = 0
 
-data_path = os.path.abspath("../Data/")
+data_path = os.path.abspath("Data/")
 models_path = os.path.abspath("models/")
 model_path = os.path.join(models_path, 'unetBest.pt')
 

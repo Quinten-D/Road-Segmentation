@@ -54,6 +54,23 @@ def reconstruct_from_labels(submission_path, image_id, mask_filename=None):
     return im
 
 
+def save_mask_as_image(tensor_output, filename):
+    """
+    :param tensor_output:
+    :param filename:
+    """
+    predictions = torch.squeeze(tensor_output * 255).numpy()
+    Image.fromarray(predictions).save(filename)
+
+def predict_labels(output, threshold):
+    """
+    :param output: The raw tensor output
+    :param threshold: The probability threshold
+    :returns: A binary tensor where we have 1 if the output value was > threshold
+    """
+    return (output > threshold).type(torch.uint8)
+
+
 def submission_to_masks(submission_filename, nb_masks, masks_path=None):
     """
     :returns: Masks that corresponds to the submission

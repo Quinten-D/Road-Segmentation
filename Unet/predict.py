@@ -3,13 +3,12 @@ import shutil
 
 import torch
 from tqdm import tqdm
-from PIL import Image
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
 from unet import UNet
 from images_dataset import ImagesDataset
-from helpers import make_img_overlays, masks_to_submission, submission_to_masks
+from helpers import make_img_overlays, masks_to_submission, submission_to_masks, predict_labels, save_mask_as_image
 
 seed = 0
 models_path = os.path.abspath("models/")
@@ -24,24 +23,6 @@ submission_path = os.path.join(output_path, 'submission')
 submission_file_path = os.path.join(output_path, 'submission.csv')
 submission_patch_path = os.path.join(output_path, 'submission_patch')
 submission_overlay_path = os.path.join(output_path, 'submission_overlay')
-
-
-def save_mask_as_image(tensor_output, filename):
-    """
-    :param tensor_output:
-    :param filename:
-    """
-    predictions = torch.squeeze(tensor_output * 255).numpy()
-    Image.fromarray(predictions).save(filename)
-
-
-def predict_labels(output, threshold):
-    """
-    :param output: The raw tensor output
-    :param threshold: The probability threshold
-    :returns: A binary tensor where we have 1 if the output value was > threshold
-    """
-    return (output > threshold).type(torch.uint8)
 
 
 class Predictor:

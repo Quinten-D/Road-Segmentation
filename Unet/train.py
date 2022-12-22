@@ -9,7 +9,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from images_dataset import ImagesDataset
 from unet import UNet
-from helpers import DiceLoss, accuracy_score_tensors, f1_score_tensors, train_test_split
+from helpers import DiceLoss, accuracy_score_tensors, f1_score_tensors, train_test_split, predict_labels
 
 seed = 0
 
@@ -47,25 +47,20 @@ class Trainer:
         self.valid_data_loader = valid_data_loader
         self.threshold = threshold
 
-        dataSize = len(self.data_loader.dataset)
         batchSize = self.data_loader.batch_size
+        dataSize = len(self.data_loader.dataset)
         self.train_steps = dataSize // batchSize
         if self.valid_data_loader is not None:
             validDataSize = len(self.valid_data_loader.dataset)
             validBatchSize = self.valid_data_loader.batch_size
             self.valid_steps = validDataSize // validBatchSize
 
-    def predict_labels(self, output):
-        """
-        :param output: The raw tensor output
-        :returns: A binary tensor where we have 1 if the output value was > threshold
-        """
-        return (output > self.threshold).type(torch.uint8)
-
     def train_epoch(self, epoch):
         """
         :param epoch: Epoch number
         :returns: [loss, accuracy, f1]
+
+        Runs the epoch on the training set while updating the parameters
         """
         self.model.train()
 
@@ -82,8 +77,8 @@ class Trainer:
                 cur_loss.backward()
                 self.optimizer.step()
 
-                output = self.predict_labels(output)
-                target = self.predict_labels(target)
+                output = predict_labels(output, self.threshold)
+                target = predict_labels(target, self.threshold)
 
                 accuracy += accuracy_score_tensors(target, output)
                 f1 += f1_score_tensors(target, output)
@@ -97,6 +92,8 @@ class Trainer:
         """
         :param epoch: Epoch number
         :returns: [loss, accuracy, f1]
+
+        Runs the epoch on the validation set
         """
         self.model.eval()
 
@@ -111,8 +108,8 @@ class Trainer:
                     output = self.model(data)
                     cur_loss = self.lossF(output, target)
 
-                    output = self.predict_labels(output)
-                    target = self.predict_labels(target)
+                    output = predict_labels(output, self.threshold)
+                    target = predict_labels(target, self.threshold)
 
                     loss += cur_loss.item()
                     f1 += f1_score_tensors(target, output)
@@ -123,6 +120,11 @@ class Trainer:
         return [loss / self.valid_steps, accuracy / self.valid_steps, f1 / self.valid_steps]
 
     def train(self, epochs):
+        """
+        :param epochs: Number of epochs
+
+        Trains the model
+        """
         max_f1 = 0.0
         stats = dict()
         with self.trange(1, epochs + 1, unit='epoch', desc='Training') as t:
@@ -167,20 +169,19 @@ def train(batch_size=10, epochs=50, lr=2e-4, split_ratio=0.15, weight_decay=1e-4
             dataset=dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=2,
         )
     else:
         train_set, test_set = train_test_split(dataset=dataset, split_ratio=split_ratio)
 
+        test_loader = DataLoader(
+            dataset=test_set,
+            shuffle=False,
+            num_workers=2,
+        )
         train_loader = DataLoader(
             dataset=train_set,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=2,
-        )
-        test_loader = DataLoader(
-            dataset=test_set,
-            shuffle=False,
             num_workers=2,
         )
 
